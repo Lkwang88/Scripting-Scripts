@@ -1,0 +1,14 @@
+# 构建产物（单元测试的编译输出）
+.dev/build/
+
+# 依赖
+node_modules/
+package-lock.json
+
+# 编辑器 / 系统
+.DS_Store
+.vscode/
+*.log
+
+# scripting-cli 本地配置（可能含本机路径/编辑器信息）
+scripting.config.json

@@ -1,0 +1,8 @@
+{
+  "name": "VPS Guard",
+  "icon": "server.rack",
+  "color": "rgba(10, 132, 255, 1)",
+  "version": "1.0.0",
+  "description": "Check whether your VPS hosts are reachable, with a colour-coded home screen widget, per-host aliases, and automatic IP geolocation.",
+  "runInApp": false
+}

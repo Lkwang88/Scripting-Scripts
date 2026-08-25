@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2020"],
+    "strict": true,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": "build",
+    "rootDir": "..",
+    "types": []
+  },
+  "include": [
+    "scripting.d.ts",
+    "../VPS Guard/types.ts",
+    "../VPS Guard/store.ts",
+    "../VPS Guard/probe.ts",
+    "../VPS Guard/format.ts"
+  ]
+}
