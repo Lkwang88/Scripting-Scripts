@@ -14,7 +14,9 @@
 
 /** 探测方式 */
 export type ProbeType =
-  /** TCP 连通性（默认）：能握手 / 被 RST 都算主机活着，只有超时才算离线 */
+  /** 自动档：ICMP（可用时）→ HTTP:80 → TCP:22 依次尝试，任何一档有回应即在线 */
+  | "auto"
+  /** TCP 连通性：能握手 / 被 RST 都算主机活着，只有超时才算离线 */
   | "tcp"
   /** HTTP(S) 探测：要求拿到响应 */
   | "http"
@@ -24,8 +26,10 @@ export type ProbeType =
 /** 单台服务器的探测配置 */
 export type ProbeConfig = {
   type: ProbeType
-  /** tcp / http 用的端口。tcp 默认 22，http 默认 80 */
+  /** tcp / http 用的端口。tcp 默认 22，http 默认 80；auto / icmp 不使用（0） */
   port: number
+  /** 迁移标记：旧默认 tcp:22 自动升级为 auto 时打上，避免每次加载反复迁移 */
+  autoMigrated?: boolean
   /** http 探测的路径，默认 "/" */
   path?: string
   /** http 探测是否走 https */
@@ -187,8 +191,8 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 export const DEFAULT_PROBE: ProbeConfig = {
-  type: "tcp",
-  port: 22,
+  type: "auto",
+  port: 0,
 }
 
 export function emptyState(): HostState {

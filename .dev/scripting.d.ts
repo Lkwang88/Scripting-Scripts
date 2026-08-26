@@ -13,8 +13,15 @@ interface ScriptingVNode {
 type VirtualNode = ScriptingVNode
 
 // lib 只开了 ES2020，这些宿主全局要自己声明
-declare function setTimeout(callback: () => void, ms?: number): number
+declare function setTimeout(callback: (...args: any[]) => void, ms?: number): number
 declare function clearTimeout(id: number): void
+
+declare const console: {
+  log: (...args: any[]) => void
+  info: (...args: any[]) => void
+  warn: (...args: any[]) => void
+  error: (...args: any[]) => void
+}
 
 interface AbortSignal {
   readonly aborted: boolean

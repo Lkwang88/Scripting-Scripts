@@ -178,7 +178,7 @@ function result(over, outcome = "offline") {
   global.Storage.set("vpsguard.hosts.v1", [{ id: "y1", address: "2.2.2.2" }])
   const fixed = S.loadHosts()
   eq("老数据补出别名", fixed[0].alias, "2.2.2.2")
-  eq("老数据补出探测配置", fixed[0].probe.port, 22)
+  eq("老数据补出探测配置(auto)", fixed[0].probe.type, "auto")
   eq("老数据补出 ip", fixed[0].ip, "2.2.2.2")
 
   // 设置合并：新增字段不该是 undefined
@@ -214,6 +214,35 @@ function result(over, outcome = "offline") {
   let st = P.mergeResult(T.emptyState(), result({ outcome: "error", detail: "地址无法解析" }), SET)
   ok("error 也计失败次数", st.consecFail === 1)
   eq("  但先标 degraded 而非 offline", st.status, "degraded")
+}
+
+// ================================================ 16. 探测方式 token 编解码
+{
+  const cases = [
+    [{ type: "auto", port: 0 }, "auto"],
+    [{ type: "icmp", port: 0 }, "icmp"],
+    [{ type: "tcp", port: 22 }, "tcp:22"],
+    [{ type: "http", port: 80, https: false, path: "/" }, "http:80"],
+    [{ type: "http", port: 443, https: true, path: "/login" }, "https:443/login"],
+  ]
+  for (const [cfg, tok] of cases) {
+    eq(`probeToken(${tok})`, P.probeToken(cfg), tok)
+    eq(`parseProbeToken(${tok})`, P.parseProbeToken(tok), cfg)
+  }
+  ok("非法 token → null", P.parseProbeToken("bogus") === null)
+}
+
+// ================================================ 17. 旧默认 tcp:22 迁移 auto
+{
+  global.Storage.set("vpsguard.hosts.v1", [
+    { id: "m1", address: "3.3.3.3", probe: { type: "tcp", port: 22 } },
+    { id: "m2", address: "4.4.4.4", probe: { type: "tcp", port: 2222 } },
+  ])
+  const hs = S.loadHosts()
+  eq("旧默认 tcp:22 → auto", hs[0].probe.type, "auto")
+  ok("  带迁移标记", hs[0].probe.autoMigrated === true)
+  eq("用户手选 tcp:2222 不动", hs[1].probe.type, "tcp")
+  eq("  端口保持", hs[1].probe.port, 2222)
 }
 
 // ---------------------------------------------- 汇总

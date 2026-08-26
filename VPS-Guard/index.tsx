@@ -61,6 +61,8 @@ import {
   detectIcmpSupport,
   isIPLiteral,
   lookupGeo,
+  parseProbeToken,
+  probeToken,
   mergeResult,
   probeHost,
   resolveDomain,
@@ -95,6 +97,7 @@ function toInt(s: string, fallback: number, min: number, max: number): number {
 }
 
 const PROBE_LABEL: Record<ProbeType, string> = {
+  auto: "自动",
   tcp: "TCP 端口",
   http: "HTTP(S)",
   icmp: "ICMP ping",
@@ -163,12 +166,10 @@ function HostEditor({
 
   /** 组装当前表单对应的 Host 对象 */
   function build(): Host {
-    const port = toInt(
-      portText,
-      probeType === "http" ? (https ? 443 : 80) : 22,
-      1,
-      65535,
-    )
+    const port =
+      probeType === "tcp" || probeType === "http"
+        ? toInt(portText, probeType === "http" ? (https ? 443 : 80) : 22, 1, 65535)
+        : 0
     return {
       id: hostId,
       alias: alias.trim() || addressTrimmed,
@@ -297,7 +298,9 @@ function HostEditor({
           header={<Text>探测方式</Text>}
           footer={
             <Text font="caption2" foregroundStyle="tertiaryLabel">
-              {probeType === "tcp"
+              {probeType === "auto"
+                ? "自动档按 ICMP → HTTP(:80) → TCP(:22) 依次尝试，任何一档有回应即判在线。新机器用这个就行。"
+                : probeType === "tcp"
                 ? "TCP 最可靠：端口有任何回应（包括拒绝连接）都说明机器活着，只有完全超时才判离线。SSH 的 22 端口是个好选择。"
                 : probeType === "http"
                   ? "HTTP 适合跑着网站的机器，能顺带确认 Web 服务本身是否正常。"
@@ -317,12 +320,13 @@ function HostEditor({
             }}
             pickerStyle="segmented"
           >
+            <Text tag="auto">自动</Text>
             <Text tag="tcp">TCP</Text>
             <Text tag="http">HTTP</Text>
             <Text tag="icmp">ICMP</Text>
           </Picker>
 
-          {probeType !== "icmp" ? (
+          {probeType === "tcp" || probeType === "http" ? (
             <TextField
               title="端口"
               value={portText}
@@ -584,7 +588,7 @@ function HostDetail({
           <DetailRow label="解析到" value={host.ip} mono />
         ) : null}
         <DetailRow label="探测方式" value={PROBE_LABEL[host.probe.type]} />
-        {host.probe.type !== "icmp" ? (
+        {host.probe.type === "tcp" || host.probe.type === "http" ? (
           <DetailRow label="端口" value={String(host.probe.port)} mono />
         ) : null}
         {host.geo != null ? (
@@ -801,10 +805,13 @@ function SettingsPage({
 
 // ---------------------------------------------------------------- 批量添加
 
-/** 导出格式：别名,地址（别名与地址相同时省略别名），与导入格式一致 */
+/** 导出格式：别名,地址,探测方式（别名与地址相同时省略别名），与导入格式一致 */
 function serializeHosts(hosts: Host[]): string {
   return hosts
-    .map(h => (h.alias === h.address ? h.address : `${h.alias},${h.address}`))
+    .map(h => {
+      const base = h.alias === h.address ? h.address : `${h.alias},${h.address}`
+      return `${base},${probeToken(h.probe)}`
+    })
     .join("\n")
 }
 
@@ -836,24 +843,40 @@ function BulkAddPage({
     for (const raw of text.split("\n")) {
       const line = raw.trim()
       if (line.length === 0) continue
+      // 三个字段：别名,地址,探测方式（后两个可省略）。
+      // 特例：「地址,探测方式」两段式 —— 第二段长得像探测 token 且第一段像地址时，
+      // 第一段是地址而不是别名。
       const sepIdx = line.search(/[，,]/)
       let alias = ""
       let addr = line
+      let probeTok = ""
       if (sepIdx > 0) {
         alias = line.slice(0, sepIdx).trim()
-        addr = line.slice(sepIdx + 1).trim()
+        const rest = line.slice(sepIdx + 1).trim()
+        const sep2 = rest.search(/[，,]/)
+        if (sep2 > 0) {
+          addr = rest.slice(0, sep2).trim()
+          probeTok = rest.slice(sep2 + 1).trim()
+        } else if (/^(auto|icmp|https?:\d+(\/\S*)?|tcp:\d+)$/i.test(rest) && isIPLiteral(alias)) {
+          probeTok = rest
+          addr = alias
+          alias = ""
+        } else {
+          addr = rest
+        }
       }
       if (addr.length === 0 || known.has(addr.toLowerCase())) {
         skipped++
         continue
       }
       known.add(addr.toLowerCase())
+      const probe = probeTok.length > 0 ? parseProbeToken(probeTok) : null
       hosts.push({
         id: newId(),
         alias: alias.length > 0 ? alias : addr,
         address: addr,
         ip: addr,
-        probe: { ...DEFAULT_PROBE },
+        probe: probe ?? { ...DEFAULT_PROBE },
         order: Number.MAX_SAFE_INTEGER,
         createdAt: Date.now(),
       })
@@ -871,7 +894,7 @@ function BulkAddPage({
         header={<Text>每行一台，粘贴进来</Text>}
         footer={
           <Text font="caption2" foregroundStyle="tertiaryLabel">
-            格式：别名,地址（别名可省略）。支持 IPv4、IPv6、域名。和现有列表地址重复的行会自动跳过。归属地之后在单台详情里查。
+            格式：别名,地址,探测方式（后两个可省略）。探测方式：auto / icmp / tcp:22 / http:80 / https:443/path。支持 IPv4、IPv6、域名，重复地址自动跳过。归属地之后在单台详情里查。
           </Text>
         }
       >
@@ -912,7 +935,7 @@ function BulkAddPage({
         header={<Text>备份 / 恢复</Text>}
         footer={
           <Text font="caption2" foregroundStyle="tertiaryLabel">
-            删除脚本重装会清掉本地数据 —— 先把这份文本复制到备忘录，需要时整段粘回上面的导入框即可恢复。
+            删除脚本重装会清掉本地数据 —— 先把这份文本复制到备忘录，需要时整段粘回上面的导入框即可恢复。探测方式已包含在内。
           </Text>
         }
       >
@@ -976,6 +999,31 @@ function MainPage(): VirtualNode {
     Widget.reloadAll()
   }
 
+  /** 归属地自动补全：没有归属地的机器逐台查。单轮最多 5 台（ip-api 限速 45/分），加了间隔防撞 */
+  async function fillMissingGeo() {
+    const cur = loadHosts()
+    const need = cur.filter(h => h.geo == null && h.paused !== true).slice(0, 5)
+    if (need.length === 0) return
+    let changed = false
+    for (const h of need) {
+      try {
+        const g = await lookupGeo(isIPLiteral(h.address) ? h.address : h.ip || h.address)
+        if (g.geo != null) {
+          h.geo = g.geo
+          changed = true
+        }
+      } catch {
+        // 单台失败不影响其他
+      }
+      await new Promise(r => setTimeout(r, 1200))
+    }
+    if (changed) {
+      saveHosts(cur)
+      setHosts(cur)
+      Widget.reloadAll()
+    }
+  }
+
   /** 探一轮。force = 忽略退避，用户主动要求的就该立刻执行 */
   async function refresh(force: boolean) {
     if (busy) return
@@ -997,6 +1045,8 @@ function MainPage(): VirtualNode {
       saveSnapshot(next)
       setSnap(next)
       Widget.reloadAll()
+      // 探完顺手把缺归属地的补上（新增/批量导入的机器会在这里自动补齐）
+      await fillMissingGeo()
     } finally {
       setBusy(false)
     }

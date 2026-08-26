@@ -44,6 +44,8 @@ exports.probeHost = probeHost;
 exports.mergeResult = mergeResult;
 exports.shouldProbe = shouldProbe;
 exports.runRound = runRound;
+exports.parseProbeToken = parseProbeToken;
+exports.probeToken = probeToken;
 const types_1 = require("./types");
 const store_1 = require("./store");
 // ---------------------------------------------------------------- 工具
@@ -79,7 +81,8 @@ async function resolveDomain(domain, timeoutSec = 8) {
     ];
     for (const url of endpoints) {
         try {
-            const resp = await fetch(url, {
+            console.log("  [call] fetch===global.fetch:", fetch === global.fetch, "| global.fetch.name:", global.fetch.name);
+        const resp = await fetch(url, {
                 headers: { accept: "application/dns-json" },
                 timeout: timeoutSec,
             });
@@ -161,6 +164,7 @@ async function lookupGeo(ip) {
 }
 /** 一次 fetch 探测。核心逻辑：快速失败=在线，超时=离线 */
 async function probeOnceHttp(ip, port, https, path, expectStatus, timeoutSec) {
+    console.log("  [probeOnceHttp] 进入 | fetch.name:", JSON.stringify(fetch === global.fetch ? "同引用" : "不同引用"), "| name:", JSON.stringify(fetch.name), "| global.fetch.name:", JSON.stringify(global.fetch.name));
     const scheme = https ? "https" : "http";
     const url = `${scheme}://${hostForUrl(ip)}:${port}${path || "/"}`;
     const started = Date.now();
@@ -301,9 +305,65 @@ async function probeHost(host, settings, icmpAvailable) {
         ip = r.ip;
         resolvedIp = r.ip;
     }
-    // ICMP 不可用时自动降级到 TCP，不让用户对着一个永远报错的配置发愁
-    const useIcmp = host.probe.type === "icmp" && icmpAvailable;
-    const downgraded = host.probe.type === "icmp" && !icmpAvailable;
+    // 自动档：ICMP（可用时）→ HTTP:80 → TCP:22 依次尝试。
+    // 任何一档拿到「有回应」就算在线；全部失败按最后一档判定。
+    // 每档只试一次 —— 三档本身就是三次机会，再套重试会把耗时翻三倍。
+    if (host.probe.type === "auto") {
+        const methods = [];
+        if (icmpAvailable) {
+            methods.push({ name: "ICMP", run: () => probeOnceIcmp(ip, settings.timeoutSec) });
+        }
+        methods.push({
+            name: "HTTP:80",
+            run: () => probeOnceHttp(ip, 80, false, "/", undefined, settings.timeoutSec),
+        });
+        methods.push({
+            name: "TCP:22",
+            run: () => probeOnceHttp(ip, 22, false, "/", undefined, settings.timeoutSec),
+        });
+        let last = { outcome: "error", rtt: -1, detail: "未执行" };
+        for (let i = 0; i < methods.length; i++) {
+            last = await methods[i].run();
+            if (last.outcome === "online") {
+                return {
+                    hostId: host.id,
+                    outcome: "online",
+                    rtt: last.rtt,
+                    detail: `[${methods[i].name}] ${last.detail}`,
+                    httpStatus: last.httpStatus,
+                    attempts: i + 1,
+                    resolvedIp,
+                    startedAt,
+                    finishedAt: Date.now(),
+                };
+            }
+        }
+        return {
+            hostId: host.id,
+            outcome: last.outcome,
+            rtt: -1,
+            detail: `[自动] ${last.detail}`,
+            attempts: methods.length,
+            resolvedIp,
+            startedAt,
+            finishedAt: Date.now(),
+        };
+    }
+    // 显式选择 ICMP 的主机：ping 不可用时如实报错，而不是悄悄换成 TCP。
+    // 探测方式必须遵循每台自己的配置 —— 这是规矩。
+    // （自动档才会链式回退，那是它的工作方式；手动指定的设置不容覆盖。）
+    if (host.probe.type === "icmp" && !icmpAvailable) {
+        return {
+            hostId: host.id,
+            outcome: "error",
+            rtt: -1,
+            detail: "ICMP 不可用：先在设置里自检，或改用自动 / TCP",
+            attempts: 0,
+            startedAt,
+            finishedAt: Date.now(),
+        };
+    }
+    const useIcmp = host.probe.type === "icmp";
     const totalTries = 1 + Math.max(0, settings.retries);
     let last = { outcome: "error", rtt: -1, detail: "未执行" };
     for (let attempt = 1; attempt <= totalTries; attempt++) {
@@ -319,7 +379,7 @@ async function probeHost(host, settings, icmpAvailable) {
                 hostId: host.id,
                 outcome: "online",
                 rtt: last.rtt,
-                detail: downgraded ? `${last.detail}・ICMP 不可用已降级 TCP` : last.detail,
+                detail: last.detail,
                 httpStatus: last.httpStatus,
                 attempts: attempt,
                 resolvedIp,
@@ -336,7 +396,7 @@ async function probeHost(host, settings, icmpAvailable) {
         hostId: host.id,
         outcome: last.outcome,
         rtt: last.outcome === "degraded" ? last.rtt : -1,
-        detail: downgraded ? `${last.detail}・ICMP 不可用已降级 TCP` : last.detail,
+        detail: last.detail,
         httpStatus: last.httpStatus,
         attempts: totalTries,
         resolvedIp,
@@ -438,4 +498,34 @@ async function runRound(hosts, snap, settings, options = {}) {
         options.onEach?.(host.id, merged);
     }
     return { updatedAt: Date.now(), networkOk: true, states };
+}
+// ---------------------------------------------------------------- 备份编解码
+/** 探测配置的文本 token：auto / icmp / tcp:22 / http:80 / https:443/path */
+const PROBE_TOKEN_RE = /^(auto|icmp|https?:\d+(?:\/\S*)?|tcp:\d+)$/i;
+function parseProbeToken(tok) {
+    const t = tok.trim().toLowerCase();
+    if (!PROBE_TOKEN_RE.test(t))
+        return null;
+    if (t === "auto")
+        return { type: "auto", port: 0 };
+    if (t === "icmp")
+        return { type: "icmp", port: 0 };
+    const hm = t.match(/^(https?):(\d+)(\/\S*)?$/);
+    if (hm) {
+        return { type: "http", port: Number(hm[2]), https: hm[1] === "https", path: hm[3] ?? "/" };
+    }
+    const tm = t.match(/^tcp:(\d+)$/);
+    return tm ? { type: "tcp", port: Number(tm[1]) } : null;
+}
+function probeToken(p) {
+    switch (p.type) {
+        case "auto":
+            return "auto";
+        case "icmp":
+            return "icmp";
+        case "http":
+            return `${p.https ? "https" : "http"}:${p.port}${p.path && p.path !== "/" ? p.path : ""}`;
+        default:
+            return `tcp:${p.port}`;
+    }
 }

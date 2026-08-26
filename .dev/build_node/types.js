@@ -39,8 +39,8 @@ exports.DEFAULT_SETTINGS = {
     accent: "systemBlue",
 };
 exports.DEFAULT_PROBE = {
-    type: "tcp",
-    port: 22,
+    type: "auto",
+    port: 0,
 };
 function emptyState() {
     return {

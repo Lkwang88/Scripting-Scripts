@@ -32,14 +32,28 @@ function loadHosts() {
     // 容错：老版本数据缺字段时补齐，避免 UI 里到处判空
     return raw
         .filter(h => h != null && typeof h.id === "string")
-        .map((h, i) => ({
-        ...h,
-        alias: h.alias || h.address || "未命名",
-        ip: h.ip || h.address,
-        probe: { ...types_1.DEFAULT_PROBE, ...(h.probe ?? {}) },
-        order: typeof h.order === "number" ? h.order : i,
-        createdAt: h.createdAt ?? Date.now(),
-    }))
+        .map((h, i) => {
+        const probe = { ...types_1.DEFAULT_PROBE, ...(h.probe ?? {}) };
+        // 一次性迁移：旧默认 tcp:22（用户没动过的）升级为自动档。
+        // 打上标记防止每次加载反复迁移；用户手动选的 tcp:22 不受影响。
+        if (probe.type === "tcp" &&
+            probe.port === 22 &&
+            probe.path == null &&
+            probe.https == null &&
+            probe.expectStatus == null) {
+            probe.type = "auto";
+            probe.port = 0;
+            probe.autoMigrated = true;
+        }
+        return {
+            ...h,
+            alias: h.alias || h.address || "未命名",
+            ip: h.ip || h.address,
+            probe,
+            order: typeof h.order === "number" ? h.order : i,
+            createdAt: h.createdAt ?? Date.now(),
+        };
+    })
         .sort((a, b) => a.order - b.order);
 }
 function saveHosts(hosts) {
