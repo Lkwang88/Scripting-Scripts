@@ -959,6 +959,16 @@ function MainPage(): VirtualNode {
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+
+  // 恢复前台时重读 Storage：脚本实例存活（minimize）时切回不会重新
+  // 挂载，snap/hosts 一直是首挂内存值 —— 按钮探测、小组件自探写回的
+  // 新数据全看不见。onResume 是唯一刷新点。（不重复注册：仅挂载时一次）
+  useEffect(() => {
+    Script.onResume(() => {
+      setSnap(loadSnapshot())
+      setHosts(loadHosts())
+    })
+  }, [])
   // 每次「新增」换一个 resetKey，驱动编辑器表单重置
   const [draftId, setDraftId] = useState(() => newId())
 

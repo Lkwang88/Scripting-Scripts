@@ -48,6 +48,7 @@ import {
 import { runRound } from "./probe"
 import { RefreshIntent } from "./app_intents"
 import {
+  dataAgeTs,
   fmtRtt,
   overallStatus,
   relTimeShort,
@@ -268,9 +269,9 @@ function Header({
         {snap.networkOk ? `${t.online}/${t.total} 在线` : "本机无网络"}
       </Text>
       <Spacer />
-      {snap.updatedAt > 0 ? (
+      {dataAgeTs(snap) > 0 ? (
         <Text font="caption2" foregroundStyle="tertiaryLabel">
-          {relTimeShort(snap.updatedAt)}
+          {relTimeShort(dataAgeTs(snap))}
         </Text>
       ) : null}
       <Button intent={RefreshIntent(undefined)}>
@@ -463,12 +464,16 @@ function ListView({
 
 // ---------------------------------------------------------------- 入口
 
-// 小组件探测的固定安全参数（不进设置页，避免误配出白屏）：
-// 每次系统刷新 2 并发探一遍（预算 12s、单次 2s 超时兜底），
-// 结果只用于本次渲染，不写回 Storage —— 快照时间戳只由 App 推进，
-// 右上角才能显示真实的「距上次完整探测」而不是永远 0s。
+// 小组件探测的固定安全参数（不进设置页，避免误配出白屏）。
+// v1.0.14：自探改为「轮转 4 台最久没探的 + 预算 6s」。两点铁律：
+// ① 预算必须远小于 WidgetKit 执行窗口 —— 全量 12s 曾拖垮渲染导致
+//    present() 不执行、小组件时间线冻结（28 分钟不刷新事故）；
+// ② 结果写回 Storage —— 与 App/按钮共用同一快照，统一数据源
+//    （否则小组件显示自己探的、App 显示 App 探的，各说各话）。
+// 右上角时间用 dataAgeTs（最老一次探测距今），不会因自探写回变 0s。
+const WIDGET_PROBE_LIMIT = 4
 const WIDGET_TIMEOUT_SEC = 2
-const WIDGET_BUDGET_MS = 12000
+const WIDGET_BUDGET_MS = 6000
 // 请求系统刷新的最短间隔（分钟）。WidgetKit 并不严格尊重这个值，
 // 但浩浩要最短 → 固定 15，不再做成可配置项。
 const WIDGET_REFRESH_MIN = 15
@@ -496,11 +501,13 @@ async function render() {
   if (hosts.length > 0) {
     try {
       const wSettings = { ...settings, timeoutSec: WIDGET_TIMEOUT_SEC, retries: 0 }
-      // 全量并行：预算 8s 内一次探完所有主机（单台 2s 超时兜底）。
-      // 不写回 Storage —— 见上方 WIDGET_BUDGET_MS 注释。
+      // 轮转 4 台最久没探的（runRound 按 lastProbeAt 升序取），预算 6s
+      // 内必完成，绝不拖垮 WidgetKit 执行窗口。结果写回 —— 见常量注释。
       snap = await runRound(hosts, snap, wSettings, {
+        limit: WIDGET_PROBE_LIMIT,
         budgetMs: WIDGET_BUDGET_MS,
       })
+      saveSnapshot(snap)
     } catch (e) {
       // 探测失败就用上次的快照渲染
       console.log("[widget] 探测失败:", String((e as { message?: string })?.message ?? e))

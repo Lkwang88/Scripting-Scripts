@@ -3,7 +3,7 @@
  * 这里不碰 Storage、不发网络请求，纯函数，方便单测。
  */
 
-import { type HostState, type Sample, type Status } from "./types"
+import { type HostState, type Sample, type Snapshot, type Status } from "./types"
 
 /** 相对时间：刚刚 / 3 分钟前 / 2 小时前 / 3 天前 */
 export function relTime(ts: number, now = Date.now()): string {
@@ -28,6 +28,22 @@ export function relTimeShort(ts: number, now = Date.now()): string {
   const hour = Math.round(min / 60)
   if (hour < 24) return `${hour}h`
   return `${Math.round(hour / 24)}d`
+}
+
+/**
+ * 数据新鲜度：快照里「最老一次探测」的时间戳（绝对时间）。
+ * 小组件右上角用它而非 updatedAt —— updatedAt 是「最近一次写入」，
+ * 小组件自探写回后会是"刚刚"（0s 假象）；而数据新鲜度反映的是
+ * 「还有多少机器没被覆盖」—— App 全量探完 → 几秒前；小组件只探
+ * 4 台 → 剩下机器的旧时间戳决定，显示几十分钟前，真实。
+ */
+export function dataAgeTs(snap: Snapshot): number {
+  let min = 0
+  for (const id in snap.states) {
+    const t = snap.states[id].lastProbeAt
+    if (t > 0 && (min === 0 || t < min)) min = t
+  }
+  return min
 }
 
 /** 时钟：14:05 */
