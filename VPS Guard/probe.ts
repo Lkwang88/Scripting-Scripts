@@ -319,7 +319,7 @@ export async function detectIcmpSupport(force = false): Promise<boolean> {
 export async function checkNetwork(settings: Settings): Promise<boolean> {
   try {
     const resp = await fetch(settings.sentinelUrl, {
-      timeout: Math.max(3, Math.min(settings.timeoutSec, 8)),
+      timeout: Math.max(2, Math.min(settings.timeoutSec, 8)),
       debugLabel: "VPSGuard sentinel",
     })
     return resp.ok || resp.status > 0

@@ -271,7 +271,7 @@ function Header({
 function Empty(): VirtualNode {
   return (
     <VStack spacing={6} padding={12}>
-      <Image systemName="server.rack" font="title3" foregroundStyle="secondaryLabel" />
+      <Image systemName="server.rack" imageScale="large" foregroundStyle="secondaryLabel" />
       <Text font="caption" fontWeight="medium" foregroundStyle="label">
         还没有添加服务器
       </Text>
@@ -456,10 +456,15 @@ async function main() {
   // 系统给小组件的时间很紧，这里只用 12 秒，剩下的交给下次刷新轮转。
   if (settings.probeInWidget && hosts.length > 0) {
     try {
-      snap = await runRound(hosts, snap, settings, {
-        limit: settings.widgetMaxProbes,
-        budgetMs: 12_000,
-      })
+      // WidgetKit 给小组件的时间极短：探测必须极度克制。
+      // 每轮只探 2 台最久没探的（按 lastProbeAt 轮转覆盖），禁用重试，
+      // 单次超时压到 widgetTimeoutSec，总预算 6s —— 到点立刻渲染。
+      const wSettings = {
+        ...settings,
+        timeoutSec: settings.widgetTimeoutSec,
+        retries: 0,
+      }
+      snap = await runRound(hosts, snap, wSettings, { limit: 2, budgetMs: 6000 })
       saveSnapshot(snap)
     } catch {
       // 探测失败就用上次的快照渲染，绝不让小组件白屏
@@ -514,14 +519,22 @@ async function main() {
   // 锁屏配件不要自绘背景，交给系统
   const isAccessory = family.startsWith("accessory")
 
+  // 点击小组件打开 App。防御式生成：这个 API 若在小组件环境有异，不能拖垮渲染
+  let schemeUrl: string | undefined
+  try {
+    schemeUrl = Script.createOpenURLScheme(Script.name)
+  } catch {
+    schemeUrl = undefined
+  }
+
   const root = isAccessory ? (
     body
   ) : (
     <VStack
       frame={{ maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }}
       padding={{ horizontal: 12, vertical: 10 }}
-      containerBackground="systemBackground"
-      widgetURL={Script.createOpenURLScheme(Script.name)}
+      widgetBackground="systemBackground"
+      widgetURL={schemeUrl}
     >
       {body}
     </VStack>
@@ -532,4 +545,12 @@ async function main() {
   Widget.present(root, { policy: "after", date: next })
 }
 
-main()
+main().catch(() => {
+  try {
+    Widget.present(
+      <Text font="caption" foregroundStyle="secondaryLabel">加载失败，等待下次刷新</Text>
+    )
+  } catch {
+    // 连兜底都失败就无能为力了
+  }
+})

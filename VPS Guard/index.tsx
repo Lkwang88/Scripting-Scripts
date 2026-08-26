@@ -116,6 +116,10 @@ function HostEditor({
   onDone: (host: Host) => void
   onCancel: () => void
 }): VirtualNode {
+  // 程序化关闭弹层：不依赖父层 sheet 状态回传（保存后不关弹窗的根因）
+  const dismiss = Navigation.useDismiss()
+  // id 挂载时生成一次：连点保存也是同一个 id，配合上层按 id 去重
+  const [hostId] = useState<string>(existing?.id ?? newId())
   const [alias, setAlias] = useState(existing?.alias ?? "")
   const [address, setAddress] = useState(existing?.address ?? "")
   const [probeType, setProbeType] = useState<ProbeType>(
@@ -143,7 +147,7 @@ function HostEditor({
       65535,
     )
     return {
-      id: existing?.id ?? newId(),
+      id: hostId,
       alias: alias.trim() || addressTrimmed,
       address: addressTrimmed,
       ip: isIPLiteral(addressTrimmed) ? addressTrimmed : existing?.ip ?? addressTrimmed,
@@ -217,14 +221,24 @@ function HostEditor({
         listStyle="insetGrouped"
         toolbar={{
           cancellationAction: [
-            <Button key="c" title="取消" action={onCancel} />,
+            <Button
+              key="c"
+              title="取消"
+              action={() => {
+                onCancel()
+                dismiss()
+              }}
+            />,
           ],
           confirmationAction: [
             <Button
               key="s"
               title="保存"
               disabled={!canSave}
-              action={() => onDone(build())}
+              action={() => {
+                onDone(build())
+                dismiss()
+              }}
             />,
           ],
         }}
@@ -766,12 +780,21 @@ function MainPage(): VirtualNode {
 
   /** 落盘 + 通知主屏。任何改动都走这里，保证小组件不会看到过期数据 */
   function persistHosts(next: Host[]) {
-    setHosts(next)
     saveHosts(next)
     const pruned = pruneSnapshot(loadSnapshot(), next)
     saveSnapshot(pruned)
+    setHosts(next)
     setSnap(pruned)
     Widget.reloadAll()
+  }
+
+  /** 新增或更新一台。数据源用 Storage 里的最新值，绕开闭包陈旧问题 */
+  function upsertHost(host: Host) {
+    const cur = loadHosts()
+    const exists = cur.some(x => x.id === host.id)
+    persistHosts(
+      exists ? cur.map(x => (x.id === host.id ? host : x)) : [...cur, host],
+    )
   }
 
   function persistSettings(next: Settings) {
@@ -819,10 +842,11 @@ function MainPage(): VirtualNode {
           topBarTrailing: [
             <Button
               key="add"
+              title="添加"
               systemImage="plus"
               action={() => setAddOpen(true)}
             />,
-            <Menu key="menu" systemImage="ellipsis.circle">
+            <Menu key="menu" title="更多" systemImage="ellipsis.circle">
               <Button
                 title={busy ? "正在探测…" : "立即全部探测"}
                 systemImage="bolt.horizontal.circle"
@@ -863,7 +887,7 @@ function MainPage(): VirtualNode {
               settings={settings}
               existing={null}
               onDone={host => {
-                persistHosts([...hosts, host])
+                upsertHost(host)
                 setAddOpen(false)
               }}
               onCancel={() => setAddOpen(false)}
@@ -904,10 +928,10 @@ function MainPage(): VirtualNode {
                   <HostDetail
                     host={h}
                     settings={settings}
-                    onSaveHost={next =>
-                      persistHosts(hosts.map(x => (x.id === next.id ? next : x)))
+                    onSaveHost={next => upsertHost(next)}
+                    onDelete={() =>
+                      persistHosts(loadHosts().filter(x => x.id !== h.id))
                     }
-                    onDelete={() => persistHosts(hosts.filter(x => x.id !== h.id))}
                   />
                 }
                 trailingSwipeActions={{
@@ -918,7 +942,9 @@ function MainPage(): VirtualNode {
                       title="删除"
                       systemImage="trash"
                       role="destructive"
-                      action={() => persistHosts(hosts.filter(x => x.id !== h.id))}
+                      action={() =>
+                        persistHosts(loadHosts().filter(x => x.id !== h.id))
+                      }
                     />,
                     <Button
                       key="pause"
