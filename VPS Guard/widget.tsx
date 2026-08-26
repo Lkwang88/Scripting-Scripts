@@ -245,7 +245,7 @@ function Header({
                 : "exclamationmark.circle.fill"
             : "wifi.slash"
         }
-        font={compact ? "caption" : "footnote"}
+        imageScale={compact ? "small" : "medium"}
         foregroundStyle={snap.networkOk ? statusColor(overall) : "systemGray"}
         widgetAccentable
       />
@@ -326,7 +326,7 @@ function RectangularView({
       <HStack spacing={4}>
         <Image
           systemName={t.offline > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"}
-          font="caption2"
+          imageScale="small"
           widgetAccentable
         />
         <Text font="caption" fontWeight="semibold" widgetAccentable>
@@ -423,11 +423,11 @@ function ListView({
     <VStack alignment="leading" spacing={density.spacing}>
       <Header t={t} snap={snap} compact={compact} />
 
-      {shown.map(h => (
+      {shown.map(host => (
         <Row
-          key={h.id}
-          host={h}
-          state={stateOf(snap, h.id)}
+          key={host.id}
+          host={host}
+          state={stateOf(snap, host.id)}
           density={density}
           settings={settings}
         />
@@ -472,10 +472,10 @@ async function main() {
   }
 
   const sorted = sortHosts(hosts, snap, settings.sortMode)
-  const t = tally(sorted.map(h => (h.paused === true ? "unknown" : stateOf(snap, h.id).status)))
+  const t = tally(sorted.map(x => (x.paused === true ? "unknown" : stateOf(snap, x.id).status)))
   const bad = sorted
-    .filter(h => h.paused !== true)
-    .map(h => ({ host: h, state: stateOf(snap, h.id) }))
+    .filter(x => x.paused !== true)
+    .map(x => ({ host: x, state: stateOf(snap, x.id) }))
     .filter(x => x.state.status === "offline" || x.state.status === "degraded")
 
   let body: VirtualNode
@@ -492,10 +492,10 @@ async function main() {
     const focus =
       key.length > 0
         ? sorted.find(
-            h =>
-              h.alias.toLowerCase() === key ||
-              h.address.toLowerCase() === key ||
-              h.ip.toLowerCase() === key,
+            x =>
+              x.alias.toLowerCase() === key ||
+              x.address.toLowerCase() === key ||
+              x.ip.toLowerCase() === key,
           )
         : undefined
     body =

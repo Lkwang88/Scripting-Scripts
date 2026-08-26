@@ -15,7 +15,6 @@ import {
   ContentUnavailableView,
   HStack,
   List,
-  Menu,
   Navigation,
   NavigationLink,
   NavigationStack,
@@ -236,8 +235,13 @@ function HostEditor({
               title="保存"
               disabled={!canSave}
               action={() => {
-                onDone(build())
+                // 先关闭弹层：即使后续落盘出错，界面状态也正确
                 dismiss()
+                try {
+                  onDone(build())
+                } catch (e) {
+                  Dialog.alert({ title: "保存失败", message: String(e) })
+                }
               }}
             />,
           ],
@@ -785,7 +789,11 @@ function MainPage(): VirtualNode {
     saveSnapshot(pruned)
     setHosts(next)
     setSnap(pruned)
-    Widget.reloadAll()
+    try {
+      Widget.reloadAll()
+    } catch {
+      // 刷新小组件失败不该影响保存主流程
+    }
   }
 
   /** 新增或更新一台。数据源用 Storage 里的最新值，绕开闭包陈旧问题 */
@@ -846,37 +854,6 @@ function MainPage(): VirtualNode {
               systemImage="plus"
               action={() => setAddOpen(true)}
             />,
-            <Menu key="menu" title="更多" systemImage="ellipsis.circle">
-              <Button
-                title={busy ? "正在探测…" : "立即全部探测"}
-                systemImage="bolt.horizontal.circle"
-                action={() => refresh(true)}
-              />
-              <Menu title="排序方式" systemImage="arrow.up.arrow.down">
-                <Button
-                  title="按状态（有问题的在前）"
-                  action={() => persistSettings({ ...settings, sortMode: "status" })}
-                />
-                <Button
-                  title="按别名"
-                  action={() => persistSettings({ ...settings, sortMode: "alias" })}
-                />
-                <Button
-                  title="按延迟"
-                  action={() => persistSettings({ ...settings, sortMode: "rtt" })}
-                />
-                <Button
-                  title="自定义顺序"
-                  action={() => persistSettings({ ...settings, sortMode: "custom" })}
-                />
-              </Menu>
-              <NavigationLink
-                title="设置"
-                destination={
-                  <SettingsPage settings={settings} onSave={persistSettings} />
-                }
-              />
-            </Menu>,
           ],
         }}
         sheet={{
@@ -921,16 +898,16 @@ function MainPage(): VirtualNode {
               </Text>
             }
           >
-            {ordered.map(h => (
+            {ordered.map(host => (
               <NavigationLink
-                key={h.id}
+                key={host.id}
                 destination={
                   <HostDetail
-                    host={h}
+                    host={host}
                     settings={settings}
                     onSaveHost={next => upsertHost(next)}
                     onDelete={() =>
-                      persistHosts(loadHosts().filter(x => x.id !== h.id))
+                      persistHosts(loadHosts().filter(x => x.id !== host.id))
                     }
                   />
                 }
@@ -943,17 +920,17 @@ function MainPage(): VirtualNode {
                       systemImage="trash"
                       role="destructive"
                       action={() =>
-                        persistHosts(loadHosts().filter(x => x.id !== h.id))
+                        persistHosts(loadHosts().filter(x => x.id !== host.id))
                       }
                     />,
                     <Button
                       key="pause"
-                      title={h.paused === true ? "恢复" : "暂停"}
-                      systemImage={h.paused === true ? "play" : "pause"}
+                      title={host.paused === true ? "恢复" : "暂停"}
+                      systemImage={host.paused === true ? "play" : "pause"}
                       action={() =>
                         persistHosts(
-                          hosts.map(x =>
-                            x.id === h.id ? { ...x, paused: !(x.paused === true) } : x,
+                          loadHosts().map(x =>
+                            x.id === host.id ? { ...x, paused: !(x.paused === true) } : x,
                           ),
                         )
                       }
@@ -962,14 +939,40 @@ function MainPage(): VirtualNode {
                 }}
               >
                 <HostRow
-                  host={h}
-                  state={stateOf(snap, h.id)}
+                  host={host}
+                  state={stateOf(snap, host.id)}
                   settings={settings}
                 />
               </NavigationLink>
             ))}
           </Section>
         )}
+
+        <Section
+          footer={
+            <Text font="caption2" foregroundStyle="tertiaryLabel">
+              排序方式也可以在「设置」里改。
+            </Text>
+          }
+        >
+          <Button
+            title={busy ? "正在探测…" : "立即全部探测"}
+            systemImage="bolt.horizontal.circle"
+            action={() => refresh(true)}
+          />
+          <NavigationLink
+            title="设置"
+            destination={
+              <SettingsPage settings={settings} onSave={persistSettings} />
+            }
+          />
+          <NavigationLink
+            title="排序方式"
+            destination={
+              <SettingsPage settings={settings} onSave={persistSettings} />
+            }
+          />
+        </Section>
       </List>
     </NavigationStack>
   )
