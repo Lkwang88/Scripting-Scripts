@@ -627,6 +627,12 @@ declare module "scripting" {
     queryParameters: Record<string, any>
     exit(result?: any): void
     createOpenURLScheme(name: string): string
+    /** 脚本实例存活时从后台切回触发（官方 zh/guide Rime 文档确认） */
+    onResume(callback: (details: { queryParameters: Record<string, any> }) => void): void
+    /** 最小化当前脚本（不终止实例）。Promise 保持 pending 直到恢复 */
+    minimize(): Promise<void>
+    /** 当前环境是否支持最小化 */
+    supportsMinimization(): boolean
   }
 
   export const Dialog: {
