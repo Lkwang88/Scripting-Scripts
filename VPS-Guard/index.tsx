@@ -29,6 +29,7 @@ import {
   Toggle,
   VStack,
   Widget,
+  useEffect,
   useState,
   type VirtualNode,
 } from "scripting"
@@ -109,19 +110,22 @@ const PROBE_LABEL: Record<ProbeType, string> = {
  */
 function HostEditor({
   existing,
+  resetKey,
   settings,
   onDone,
   onCancel,
 }: {
   existing: Host | null
+  /** 每次打开「新增」都换一个新值：sheet 关闭后组件不卸载，
+   *  useState 初始值只在首次挂载生效，必须靠它驱动表单重置 */
+  resetKey: string
   settings: Settings
-  onDone: (host: Host) => void
+  onDone: (host: Host, opts?: { addAnother?: boolean }) => void
   onCancel: () => void
 }): VirtualNode {
   // 程序化关闭弹层：不依赖父层 sheet 状态回传（保存后不关弹窗的根因）
   const dismiss = Navigation.useDismiss()
-  // id 挂载时生成一次：连点保存也是同一个 id，配合上层按 id 去重
-  const [hostId] = useState<string>(existing?.id ?? newId())
+  const [hostId, setHostId] = useState<string>(existing?.id ?? resetKey)
   const [alias, setAlias] = useState(existing?.alias ?? "")
   const [address, setAddress] = useState(existing?.address ?? "")
   const [probeType, setProbeType] = useState<ProbeType>(
@@ -136,6 +140,23 @@ function HostEditor({
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testOk, setTestOk] = useState<boolean | null>(null)
+
+  // resetKey 变化 = 新的一次添加/编辑会话，整张表单回到初始值。
+  // 没有这个的话，第二次打开「添加」会残留上一台的表单和 id，
+  // 保存就变成改上一台（真机已踩）。
+  useEffect(() => {
+    setHostId(existing?.id ?? resetKey)
+    setAlias(existing?.alias ?? "")
+    setAddress(existing?.address ?? "")
+    setProbeType(existing?.probe.type ?? DEFAULT_PROBE.type)
+    setPortText(String(existing?.probe.port ?? DEFAULT_PROBE.port))
+    setPathText(existing?.probe.path ?? "/")
+    setHttps(existing?.probe.https === true)
+    setGeo(existing?.geo)
+    setTesting(false)
+    setTestResult(null)
+    setTestOk(null)
+  }, [resetKey])
 
   const addressTrimmed = address.trim()
   const canSave = addressTrimmed.length > 0
@@ -355,6 +376,15 @@ function HostEditor({
           />
         </Section>
 
+        <Section>
+          <Button
+            title="保存并继续添加下一台"
+            systemImage="plus.square.on.plus.square"
+            disabled={!canSave || testing}
+            action={() => onDone(build(), { addAnother: true })}
+          />
+        </Section>
+
         <Section
           header={<Text>保存前先试一下</Text>}
           footer={
@@ -461,6 +491,7 @@ function HostDetail({
         content: (
           <HostEditor
             existing={host}
+            resetKey={host.id}
             settings={settings}
             onDone={next => {
               onSaveHost(next)
@@ -748,6 +779,140 @@ function SettingsPage({
   )
 }
 
+// ---------------------------------------------------------------- 批量添加
+
+/** 导出格式：别名,地址（别名与地址相同时省略别名），与导入格式一致 */
+function serializeHosts(hosts: Host[]): string {
+  return hosts
+    .map(h => (h.alias === h.address ? h.address : `${h.alias},${h.address}`))
+    .join("\n")
+}
+
+/**
+ * 批量粘贴添加 + 文本备份。
+ * 一行一台：`别名,地址` 或只写地址；与现有列表地址重复的行跳过。
+ * 备份用同一格式 —— 复制出去存好，丢了列表就粘回来。
+ */
+function BulkAddPage({
+  onImport,
+}: {
+  onImport: (hosts: Host[]) => void
+}): VirtualNode {
+  const [text, setText] = useState("")
+  const [result, setResult] = useState<string | null>(null)
+  const [exportText, setExportText] = useState(() => serializeHosts(loadHosts()))
+
+  const lineCount = text
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0).length
+
+  function parse(): { hosts: Host[]; skipped: number } {
+    const known = new Set(
+      loadHosts().map(x => x.address.trim().toLowerCase()),
+    )
+    const hosts: Host[] = []
+    let skipped = 0
+    for (const raw of text.split("\n")) {
+      const line = raw.trim()
+      if (line.length === 0) continue
+      const sepIdx = line.search(/[，,]/)
+      let alias = ""
+      let addr = line
+      if (sepIdx > 0) {
+        alias = line.slice(0, sepIdx).trim()
+        addr = line.slice(sepIdx + 1).trim()
+      }
+      if (addr.length === 0 || known.has(addr.toLowerCase())) {
+        skipped++
+        continue
+      }
+      known.add(addr.toLowerCase())
+      hosts.push({
+        id: newId(),
+        alias: alias.length > 0 ? alias : addr,
+        address: addr,
+        ip: addr,
+        probe: { ...DEFAULT_PROBE },
+        order: Number.MAX_SAFE_INTEGER,
+        createdAt: Date.now(),
+      })
+    }
+    return { hosts, skipped }
+  }
+
+  return (
+    <List
+      navigationTitle="批量添加"
+      navigationBarTitleDisplayMode="inline"
+      listStyle="insetGrouped"
+    >
+      <Section
+        header={<Text>每行一台，粘贴进来</Text>}
+        footer={
+          <Text font="caption2" foregroundStyle="tertiaryLabel">
+            格式：别名,地址（别名可省略）。支持 IPv4、IPv6、域名。和现有列表地址重复的行会自动跳过。归属地之后在单台详情里查。
+          </Text>
+        }
+      >
+        <TextField
+          title="服务器列表"
+          value={text}
+          onChanged={setText}
+          prompt={"东京,1.2.3.4\nvps.example.com"}
+          axis="vertical"
+          lineLimit={{ min: 6, max: 14 }}
+        />
+        <Button
+          title={lineCount > 0 ? `导入 ${lineCount} 台` : "导入"}
+          systemImage="square.and.arrow.down"
+          disabled={lineCount === 0}
+          action={() => {
+            const { hosts, skipped } = parse()
+            if (hosts.length === 0) {
+              setResult("没有可导入的新地址")
+              return
+            }
+            onImport(hosts)
+            setResult(
+              `已添加 ${hosts.length} 台` +
+                (skipped > 0 ? `，跳过 ${skipped} 行（重复或格式不对）` : ""),
+            )
+            setText("")
+          }}
+        />
+        {result != null ? (
+          <Text font="footnote" foregroundStyle="systemGreen">
+            {result}
+          </Text>
+        ) : null}
+      </Section>
+
+      <Section
+        header={<Text>备份 / 恢复</Text>}
+        footer={
+          <Text font="caption2" foregroundStyle="tertiaryLabel">
+            删除脚本重装会清掉本地数据 —— 先把这份文本复制到备忘录，需要时整段粘回上面的导入框即可恢复。
+          </Text>
+        }
+      >
+        <Button
+          title="从当前列表重新生成"
+          systemImage="arrow.clockwise"
+          action={() => setExportText(serializeHosts(loadHosts()))}
+        />
+        <TextField
+          title="备份文本"
+          value={exportText}
+          onChanged={setExportText}
+          axis="vertical"
+          lineLimit={{ min: 4, max: 10 }}
+        />
+      </Section>
+    </List>
+  )
+}
+
 // ---------------------------------------------------------------- 主列表
 
 function MainPage(): VirtualNode {
@@ -756,6 +921,8 @@ function MainPage(): VirtualNode {
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  // 每次「新增」换一个 resetKey，驱动编辑器表单重置
+  const [draftId, setDraftId] = useState(() => newId())
 
   const t = tally(hosts.map(h => stateOf(snap, h.id).status))
   const ordered = sortHosts(hosts, snap, settings.sortMode)
@@ -830,7 +997,10 @@ function MainPage(): VirtualNode {
               key="add"
               title="添加"
               systemImage="plus"
-              action={() => setAddOpen(true)}
+              action={() => {
+                setDraftId(newId())
+                setAddOpen(true)
+              }}
             />,
           ],
         }}
@@ -841,9 +1011,15 @@ function MainPage(): VirtualNode {
             <HostEditor
               settings={settings}
               existing={null}
-              onDone={host => {
+              resetKey={draftId}
+              onDone={(host, opts) => {
                 upsertHost(host)
-                setAddOpen(false)
+                if (opts?.addAnother) {
+                  // 留在弹层里，换一个新草稿 id → 表单自动重置
+                  setDraftId(newId())
+                } else {
+                  setAddOpen(false)
+                }
               }}
               onCancel={() => setAddOpen(false)}
             />
@@ -943,6 +1119,10 @@ function MainPage(): VirtualNode {
             destination={
               <SettingsPage settings={settings} onSave={persistSettings} />
             }
+          />
+          <NavigationLink
+            title="批量添加 / 备份"
+            destination={<BulkAddPage onImport={hosts => persistHosts([...loadHosts(), ...hosts])} />}
           />
           <NavigationLink
             title="排序方式"
