@@ -23,6 +23,7 @@ import {
   Spacer,
   Text,
   VStack,
+  Widget,
   ZStack,
   type VirtualNode,
 } from "scripting"

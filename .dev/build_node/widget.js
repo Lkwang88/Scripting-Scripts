@@ -199,11 +199,11 @@ function main() {
     }
     catch {
         // 任何异常都要给出可见内容，绝不白屏
-        Widget.present(h(scripting_1.Text, { font: "caption", foregroundStyle: "secondaryLabel" }, "\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u6253\u5F00 App \u5237\u65B0"));
+        scripting_1.Widget.present(h(scripting_1.Text, { font: "caption", foregroundStyle: "secondaryLabel" }, "\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u6253\u5F00 App \u5237\u65B0"));
     }
 }
 function render() {
-    const family = Widget.family;
+    const family = scripting_1.Widget.family;
     const settings = (0, store_1.loadSettings)();
     const hosts = (0, store_1.loadHosts)();
     // 只读快照，纯同步渲染 —— 与官方小组件模板完全同构。
@@ -229,7 +229,7 @@ function render() {
     }
     else if (family === "systemSmall") {
         // parameter 填了别名或 IP 就单机特写 —— 同一份代码，多个实例各看一台
-        const key = (Widget.parameter ?? "").trim().toLowerCase();
+        const key = (scripting_1.Widget.parameter ?? "").trim().toLowerCase();
         const focus = key.length > 0
             ? sorted.find(x => x.alias.toLowerCase() === key ||
                 x.address.toLowerCase() === key ||
@@ -245,6 +245,6 @@ function render() {
     const isAccessory = family.startsWith("accessory");
     const root = isAccessory ? (body) : (h(scripting_1.VStack, { frame: { maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }, padding: { horizontal: 12, vertical: 10 }, widgetBackground: "systemBackground" }, body));
     // 官方模板同款裸调用：同步、无参数，刷新节奏交给系统
-    Widget.present(root);
+    scripting_1.Widget.present(root);
 }
 main();

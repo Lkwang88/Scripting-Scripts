@@ -104,74 +104,9 @@ type WidgetReloadPolicy =
   | { policy: "atEnd" }
   | { policy: "after"; date: Date }
 
-declare namespace Widget {
-  const family: WidgetFamily
-  const displaySize: { width: number; height: number }
-  const parameter: string
-  function present(
-    element: VirtualNode,
-    options?: WidgetReloadPolicy | { reloadPolicy?: WidgetReloadPolicy },
-  ): void
-  function preview(options?: {
-    family?: WidgetFamily
-    parameters?: { options: Record<string, string>; default: string }
-  }): Promise<void>
-  function reloadAll(): void
-}
-
 // ------------------------------------------------------------------ Script
 
-declare namespace Script {
-  const name: string
-  const directory: string
-  const env:
-    | "index"
-    | "widget"
-    | "control_widget"
-    | "notification"
-    | "intent"
-    | "app_intents"
-    | "assistant_tool"
-    | "keyboard"
-    | "live_activity"
-  const widgetParameter: string
-  const queryParameters: Record<string, any>
-  function exit(result?: any): void
-  function createOpenURLScheme(name: string): string
-}
-
 // ------------------------------------------------------------------ Dialog
-
-declare namespace Dialog {
-  function alert(options: {
-    message: string
-    title?: string
-    buttonLabel?: string
-  }): Promise<void>
-  function confirm(options: {
-    message: string
-    title?: string
-    cancelLabel?: string
-    confirmLabel?: string
-  }): Promise<boolean>
-  function prompt(options: {
-    title: string
-    message?: string
-    defaultValue?: string
-    placeholder?: string
-    obscureText?: boolean
-    selectAll?: boolean
-    cancelLabel?: string
-    confirmLabel?: string
-    keyboardType?: string
-  }): Promise<string | null>
-  function actionSheet(options: {
-    title: string
-    message?: string
-    cancelButton?: boolean
-    actions: { label: string; destructive?: boolean }[]
-  }): Promise<number | null>
-}
 
 declare module "scripting" {
   export type VirtualNode = ScriptingVNode
@@ -612,6 +547,82 @@ declare module "scripting" {
     reducer: (state: S, action: A) => S,
     initial: S,
   ): [S, (action: A) => void]
+
+  export type WidgetFamily =
+    | "systemSmall"
+    | "systemMedium"
+    | "systemLarge"
+    | "accessoryCircular"
+    | "accessoryRectangular"
+
+  export type WidgetReloadPolicy =
+    | { policy: "atEnd" }
+    | { policy: "after"; date: Date }
+
+  export const Widget: {
+    family: WidgetFamily
+    displaySize: { width: number; height: number }
+    parameter: string
+    present(
+      element: VirtualNode,
+      options?: WidgetReloadPolicy | { reloadPolicy?: WidgetReloadPolicy },
+    ): void
+    preview(options?: {
+      family?: WidgetFamily
+      parameters?: { options: Record<string, string>; default: string }
+    }): Promise<void>
+    reloadAll(): void
+  }
+
+  export const Script: {
+    name: string
+    directory: string
+    env:
+      | "index"
+      | "widget"
+      | "control_widget"
+      | "notification"
+      | "intent"
+      | "app_intents"
+      | "assistant_tool"
+      | "keyboard"
+      | "live_activity"
+    widgetParameter: string
+    queryParameters: Record<string, any>
+    exit(result?: any): void
+    createOpenURLScheme(name: string): string
+  }
+
+  export const Dialog: {
+    alert(options: {
+      message: string
+      title?: string
+      buttonLabel?: string
+    }): Promise<void>
+    confirm(options: {
+      message: string
+      title?: string
+      cancelLabel?: string
+      confirmLabel?: string
+    }): Promise<boolean>
+    prompt(options: {
+      title: string
+      message?: string
+      defaultValue?: string
+      placeholder?: string
+      obscureText?: boolean
+      selectAll?: boolean
+      cancelLabel?: string
+      confirmLabel?: string
+      keyboardType?: string
+    }): Promise<string | null>
+    actionSheet(options: {
+      title: string
+      message?: string
+      cancelButton?: boolean
+      actions: { label: string; destructive?: boolean }[]
+    }): Promise<number | null>
+  }
 
   export const Navigation: {
     present(options: {

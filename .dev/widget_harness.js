@@ -85,6 +85,12 @@ exportsObj.useMemo = f => f()
 exportsObj.useCallback = f => f
 exportsObj.useReducer = (r, i) => [i, () => {}]
 exportsObj.Navigation = { present: async () => {}, push: async () => {}, useDismiss: () => () => {} }
+exportsObj.Widget = global.Widget
+exportsObj.Script = global.Script
+exportsObj.Dialog = {
+  alert: async () => {}, confirm: async () => true,
+  prompt: async () => null, actionSheet: async () => null,
+}
 exportsObj.AppIntentManager = { register: () => () => ({}) }
 exportsObj.AppIntentProtocol = {}
 exportsObj.modifiers = () => ({})

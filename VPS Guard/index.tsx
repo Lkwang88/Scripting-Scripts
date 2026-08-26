@@ -13,12 +13,14 @@
 import {
   Button,
   ContentUnavailableView,
+  Dialog,
   HStack,
   List,
   Navigation,
   NavigationLink,
   NavigationStack,
   Picker,
+  Script,
   Section,
   Spacer,
   Stepper,
@@ -26,6 +28,7 @@ import {
   TextField,
   Toggle,
   VStack,
+  Widget,
   useState,
   type VirtualNode,
 } from "scripting"
