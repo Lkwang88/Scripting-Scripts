@@ -268,8 +268,29 @@ async function probeOnceHttp(
   }
 }
 
-/** ICMP 探测。只在真机自检确认 ping 可用后才会被调用 */
+/**
+ * Shell 可用性缓存（进程内）。首次调用探测一次，之后直接用结果。
+ * 某些执行环境（小组件按钮的 app_intents 扩展）没有 Shell —— 在那里
+ * 每次 ICMP 档都空耗满超时会拖垮整个探测轮的预算（实测 6s 只够一台）。
+ */
+let shellUsable: boolean | null = null
+
+async function shellAvailable(): Promise<boolean> {
+  if (shellUsable !== null) return shellUsable
+  try {
+    const r = await Shell.run("echo ok", { timeout: 5 })
+    shellUsable = r.exitCode === 0 && r.output.includes("ok")
+  } catch {
+    shellUsable = false
+  }
+  return shellUsable
+}
+
+/** ICMP 探测。Shell 不可用的环境立即失败（零超时成本），不空耗预算 */
 async function probeOnceIcmp(ip: string, timeoutSec: number): Promise<Attempt> {
+  if (!(await shellAvailable())) {
+    return { outcome: "error", rtt: -1, detail: "此环境无 Shell，ICMP 不可用" }
+  }
   const started = Date.now()
   try {
     const waitSec = Math.max(1, Math.round(timeoutSec))
@@ -403,7 +424,10 @@ export async function probeHost(
       }
       if (methods[i].name === "ICMP") {
         // ICMP 档试过但失败 —— 记下原因，回退详情里要带上
-        icmpNote = `ICMP失败(${last.detail})`
+        icmpNote =
+          last.detail.includes("无 Shell")
+            ? "ICMP无Shell"
+            : `ICMP失败(${last.detail})`
       }
     }
     return {

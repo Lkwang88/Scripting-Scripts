@@ -466,9 +466,9 @@ function ListView({
 // 小组件探测的固定安全参数（不进设置页，避免误配出白屏）：
 // 每轮只探 2 台最久没探的（按 lastProbeAt 轮转，几次刷新覆盖全部），
 // 禁用重试、单次 2s、总预算 6s —— 到点立刻渲染。
-const WIDGET_PROBE_LIMIT = 2
+const WIDGET_PROBE_LIMIT = 4
 const WIDGET_TIMEOUT_SEC = 2
-const WIDGET_BUDGET_MS = 6000
+const WIDGET_BUDGET_MS = 8000
 
 async function main() {
   try {
