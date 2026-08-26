@@ -598,8 +598,8 @@ export type RoundOptions = {
 /**
  * 探测一轮。
  *
- * 顺序执行而不是并发 —— 十来台机器并发打出去，iOS 的连接池和 CPU 都吃紧，
- * 而且我们完全不赶时间。稳比快重要。
+ * v1.0.12：全量并行 —— fetch 天生可并发，多台同时探，整轮耗时约等于
+ * 单台最坏耗时而不是台数×耗时。预算只要容得下单台就能跑全批。
  */
 export async function runRound(
   hosts: Host[],
@@ -631,21 +631,30 @@ export async function runRound(
   })
   const batch = options.limit ? ordered.slice(0, options.limit) : ordered
 
-  for (const host of batch) {
-    // 预算用完就收工。没探到的主机保留上一次状态，下一轮因为按
-    // lastProbeAt 升序排，它们会优先被照顾到，长期看每台都轮得到。
-    if (options.budgetMs != null) {
-      const spent = Date.now() - now
-      // 至少要留够一台的最坏耗时，否则开了头也做不完，白花时间
-      const worstCase = settings.timeoutSec * 1000
-      if (spent + worstCase > options.budgetMs) break
-    }
+  if (batch.length === 0) {
+    return { updatedAt: now, networkOk: true, states }
+  }
 
+  // 并行预算：全量并行时总耗时 ≈ 单台最坏耗时（含重试次数），
+  // 不是台数 × 单台耗时。预算连一台的最坏情况都容不下时，
+  // 保底只探最早到期的一台，避免整轮空转。
+  const worstCase = settings.timeoutSec * 1000 * (settings.retries + 1)
+  if (options.budgetMs != null && worstCase > options.budgetMs) {
+    const host = batch[0]
     const prev = states[host.id] ?? emptyState()
     const result = await probeHost(host, settings, icmpAvailable)
-    const merged = mergeResult(prev, result, settings)
-    states[host.id] = merged
-    options.onEach?.(host.id, merged)
+    states[host.id] = mergeResult(prev, result, settings)
+    options.onEach?.(host.id, states[host.id])
+  } else {
+    await Promise.all(
+      batch.map(async host => {
+        const prev = states[host.id] ?? emptyState()
+        const result = await probeHost(host, settings, icmpAvailable)
+        const merged = mergeResult(prev, result, settings)
+        states[host.id] = merged
+        options.onEach?.(host.id, merged)
+      }),
+    )
   }
 
   return { updatedAt: Date.now(), networkOk: true, states }

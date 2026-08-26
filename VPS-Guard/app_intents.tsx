@@ -17,11 +17,10 @@ const RefreshIntent = AppIntentManager.register({
       const settings = loadSettings()
       const hosts = loadHosts()
       if (hosts.length > 0) {
-        // 手动点了就该有实质反馈。iOS 给 AppIntent 的执行窗口比小组件
-        // 渲染宽裕得多：11 台实测 20s 预算能覆盖（每台 ICMP 档在无 Shell
-        // 环境零成本跳过，HTTP 档快速失败为主）
+        // 手动点了就该有实质反馈：全量并行探一遍。iOS 给 AppIntent 的
+        // 执行窗口比小组件渲染宽裕得多：11 台并行 20s 预算内必跑完
+        // （每台 ICMP 档在无 Shell 环境零成本跳过，HTTP/TCP 档 2s 超时）
         const snap = await runRound(hosts, loadSnapshot(), settings, {
-          limit: 30,
           budgetMs: 20_000,
           force: true,
         })

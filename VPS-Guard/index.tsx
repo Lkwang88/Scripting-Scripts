@@ -748,7 +748,7 @@ function SettingsPage({
         header={<Text>小组件</Text>}
         footer={
           <Text font="caption2" foregroundStyle="tertiaryLabel">
-            iOS 按预算调度小组件刷新，实际通常 15~60 分钟一次，闲置时更久——这是系统天花板。开启「小组件内探测」后，每次刷新顺手探 2 台最久没探的，几次一轮全覆盖；关掉则只显示 App 里探测的结果。
+            iOS 按预算调度小组件刷新，实际通常 15~60 分钟一次，闲置时更久——这是系统天花板。开启「小组件内探测」后，每次系统刷新全量并行探一遍全部主机（约 2s）；关掉则只显示 App/按钮最近的探测结果。右上角时间 = 距最近一次完整探测。
           </Text>
         }
       >
@@ -756,11 +756,6 @@ function SettingsPage({
           title="小组件内探测"
           value={s.probeInWidget}
           onChanged={v => patch({ probeInWidget: v })}
-        />
-        <Stepper
-          title={`期望刷新间隔 ${s.refreshMinutes} 分钟`}
-          onIncrement={() => patch({ refreshMinutes: Math.min(120, s.refreshMinutes + 5) })}
-          onDecrement={() => patch({ refreshMinutes: Math.max(5, s.refreshMinutes - 5) })}
         />
       </Section>
 

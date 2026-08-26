@@ -152,9 +152,7 @@ export type Settings = {
   backoffMaxMin: number
   /** 延迟超过这个值显示为「慢」（黄灯，毫秒） */
   degradedMs: number
-  /** 期望的小组件刷新间隔（分钟）。只是给系统的建议，实际由 iOS 预算决定 */
-  refreshMinutes: number
-  /** 允许小组件在被系统刷新时顺手探测。关掉后小组件只显示 App 探测的结果 */
+  /** 允许小组件在被系统刷新时全量并行探测。关掉后小组件只显示 App 探测的结果 */
   probeInWidget: boolean
   /** 本机联网哨兵地址：探不通它就认为是手机没网，本轮作废 */
   sentinelUrl: string
@@ -179,7 +177,6 @@ export const DEFAULT_SETTINGS: Settings = {
   backoffFactor: 2,
   backoffMaxMin: 60,
   degradedMs: 800,
-  refreshMinutes: 15,
   probeInWidget: true,
   sentinelUrl: "https://1.1.1.1/cdn-cgi/trace",
   showRtt: true,

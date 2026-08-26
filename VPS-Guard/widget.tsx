@@ -464,11 +464,14 @@ function ListView({
 // ---------------------------------------------------------------- 入口
 
 // 小组件探测的固定安全参数（不进设置页，避免误配出白屏）：
-// 每轮只探 2 台最久没探的（按 lastProbeAt 轮转，几次刷新覆盖全部），
-// 禁用重试、单次 2s、总预算 6s —— 到点立刻渲染。
-const WIDGET_PROBE_LIMIT = 4
+// 每次系统刷新全量并行探一遍（预算 8s、单次 2s 超时兜底），
+// 结果只用于本次渲染，不写回 Storage —— 快照时间戳只由 App 推进，
+// 右上角才能显示真实的「距上次完整探测」而不是永远 0s。
 const WIDGET_TIMEOUT_SEC = 2
 const WIDGET_BUDGET_MS = 8000
+// 请求系统刷新的最短间隔（分钟）。WidgetKit 并不严格尊重这个值，
+// 但浩浩要最短 → 固定 15，不再做成可配置项。
+const WIDGET_REFRESH_MIN = 15
 
 async function main() {
   try {
@@ -493,11 +496,11 @@ async function render() {
   if (hosts.length > 0) {
     try {
       const wSettings = { ...settings, timeoutSec: WIDGET_TIMEOUT_SEC, retries: 0 }
+      // 全量并行：预算 8s 内一次探完所有主机（单台 2s 超时兜底）。
+      // 不写回 Storage —— 见上方 WIDGET_BUDGET_MS 注释。
       snap = await runRound(hosts, snap, wSettings, {
-        limit: WIDGET_PROBE_LIMIT,
         budgetMs: WIDGET_BUDGET_MS,
       })
-      saveSnapshot(snap)
     } catch (e) {
       // 探测失败就用上次的快照渲染
       console.log("[widget] 探测失败:", String((e as { message?: string })?.message ?? e))
@@ -567,7 +570,7 @@ async function render() {
   // 给系统一个明确的刷新时间点（文档支持的形态）。
   // 注意：这只是「请求」，iOS 按预算调度，实际通常 15~60 分钟一次，
   // 手机闲置/夜间会更懒 —— 这是平台天花板，不是 bug。
-  const next = new Date(Date.now() + Math.max(5, settings.refreshMinutes) * 60_000)
+  const next = new Date(Date.now() + WIDGET_REFRESH_MIN * 60_000)
   Widget.present(root, { policy: "after", date: next })
 }
 
