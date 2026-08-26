@@ -307,8 +307,13 @@ async function probeHost(host, settings, icmpAvailable) {
     // 任何一档拿到「有回应」就算在线；全部失败按最后一档判定。
     // 每档只试一次 —— 三档本身就是三次机会，再套重试会把耗时翻三倍。
     if (host.probe.type === "auto") {
+        // ICMP 档的可用性写进失败详情 —— 小组件按钮/扩展进程里 ping 可能
+        // 跑不了（沙盒），这条备注能让人一眼看出回退的原因
+        const selfCheckFlag = (0, store_1.loadIcmpAvailable)();
+        let icmpNote = selfCheckFlag === null ? "ICMP未自检" : "ICMP不可用";
         const methods = [];
         if (icmpAvailable) {
+            icmpNote = "";
             methods.push({ name: "ICMP", run: () => probeOnceIcmp(ip, settings.timeoutSec) });
         }
         methods.push({
@@ -335,12 +340,16 @@ async function probeHost(host, settings, icmpAvailable) {
                     finishedAt: Date.now(),
                 };
             }
+            if (methods[i].name === "ICMP") {
+                // ICMP 档试过但失败 —— 记下原因，回退详情里要带上
+                icmpNote = `ICMP失败(${last.detail})`;
+            }
         }
         return {
             hostId: host.id,
             outcome: last.outcome,
             rtt: -1,
-            detail: `[自动] ${last.detail}`,
+            detail: icmpNote ? `[自动·${icmpNote}→${last.detail}]` : `[自动] ${last.detail}`,
             attempts: methods.length,
             resolvedIp,
             startedAt,
