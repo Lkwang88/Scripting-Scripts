@@ -673,31 +673,6 @@ function SettingsPage({
         />
       </Section>
 
-      <Section
-        header={<Text>小组件</Text>}
-        footer={
-          <Text font="caption2" foregroundStyle="tertiaryLabel">
-            iOS 不允许小组件秒级刷新，实际间隔由系统决定（通常十几分钟起）。关掉「小组件自行探测」的话，小组件只显示 App 里探测的结果，最省电。
-          </Text>
-        }
-      >
-        <Toggle
-          title="小组件自行探测"
-          value={s.probeInWidget}
-          onChanged={v => patch({ probeInWidget: v })}
-        />
-        <Stepper
-          title={`期望刷新间隔 ${s.refreshMinutes} 分钟`}
-          onIncrement={() => patch({ refreshMinutes: Math.min(120, s.refreshMinutes + 5) })}
-          onDecrement={() => patch({ refreshMinutes: Math.max(5, s.refreshMinutes - 5) })}
-        />
-        <Stepper
-          title={`单次最多探 ${s.widgetMaxProbes} 台`}
-          onIncrement={() => patch({ widgetMaxProbes: Math.min(30, s.widgetMaxProbes + 1) })}
-          onDecrement={() => patch({ widgetMaxProbes: Math.max(1, s.widgetMaxProbes - 1) })}
-        />
-      </Section>
-
       <Section header={<Text>显示</Text>}>
         <Toggle
           title="显示延迟"

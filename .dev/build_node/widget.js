@@ -19,7 +19,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const scripting_1 = require("scripting");
 const types_1 = require("./types");
 const store_1 = require("./store");
-const probe_1 = require("./probe");
 const format_1 = require("./format");
 // ---------------------------------------------------------------- 布局预算
 /**
@@ -194,30 +193,24 @@ function ListView({ hosts, snap, settings, family, t, }) {
             " \u53F0\u672A\u663E\u793A")) : null));
 }
 // ---------------------------------------------------------------- 入口
-async function main() {
+function main() {
+    try {
+        render();
+    }
+    catch {
+        // 任何异常都要给出可见内容，绝不白屏
+        Widget.present(h(scripting_1.Text, { font: "caption", foregroundStyle: "secondaryLabel" }, "\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u6253\u5F00 App \u5237\u65B0"));
+    }
+}
+function render() {
     const family = Widget.family;
     const settings = (0, store_1.loadSettings)();
     const hosts = (0, store_1.loadHosts)();
-    let snap = (0, store_1.loadSnapshot)();
-    // 小组件里探测：给硬预算，宁可这轮少探几台，也不能超时被系统杀掉。
-    // 系统给小组件的时间很紧，这里只用 12 秒，剩下的交给下次刷新轮转。
-    if (settings.probeInWidget && hosts.length > 0) {
-        try {
-            // WidgetKit 给小组件的时间极短：探测必须极度克制。
-            // 每轮只探 2 台最久没探的（按 lastProbeAt 轮转覆盖），禁用重试，
-            // 单次超时压到 widgetTimeoutSec，总预算 6s —— 到点立刻渲染。
-            const wSettings = {
-                ...settings,
-                timeoutSec: settings.widgetTimeoutSec,
-                retries: 0,
-            };
-            snap = await (0, probe_1.runRound)(hosts, snap, wSettings, { limit: 2, budgetMs: 6000 });
-            (0, store_1.saveSnapshot)(snap);
-        }
-        catch {
-            // 探测失败就用上次的快照渲染，绝不让小组件白屏
-        }
-    }
+    // 只读快照，纯同步渲染 —— 与官方小组件模板完全同构。
+    // 官方模式：present 之前的数据准备必须是同步的；小组件里不做任何
+    // 网络请求（WidgetKit 的执行窗口极短，await 期间进程可能被挂起，
+    // present 永远执行不到，表现为白屏）。数据刷新在 App 内完成。
+    const snap = (0, store_1.loadSnapshot)();
     const sorted = (0, store_1.sortHosts)(hosts, snap, settings.sortMode);
     const t = (0, format_1.tally)(sorted.map(x => (x.paused === true ? "unknown" : (0, store_1.stateOf)(snap, x.id).status)));
     const bad = sorted
@@ -250,24 +243,8 @@ async function main() {
     }
     // 锁屏配件不要自绘背景，交给系统
     const isAccessory = family.startsWith("accessory");
-    // 点击小组件打开 App。防御式生成：这个 API 若在小组件环境有异，不能拖垮渲染
-    let schemeUrl;
-    try {
-        schemeUrl = Script.createOpenURLScheme(Script.name);
-    }
-    catch {
-        schemeUrl = undefined;
-    }
-    const root = isAccessory ? (body) : (h(scripting_1.VStack, { frame: { maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }, padding: { horizontal: 12, vertical: 10 }, widgetBackground: "systemBackground", widgetURL: schemeUrl }, body));
-    // 请求下一次刷新。系统只把它当建议，实际按预算给。
-    const next = new Date(Date.now() + Math.max(5, settings.refreshMinutes) * 60000);
-    Widget.present(root, { policy: "after", date: next });
+    const root = isAccessory ? (body) : (h(scripting_1.VStack, { frame: { maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }, padding: { horizontal: 12, vertical: 10 }, widgetBackground: "systemBackground" }, body));
+    // 官方模板同款裸调用：同步、无参数，刷新节奏交给系统
+    Widget.present(root);
 }
-main().catch(() => {
-    try {
-        Widget.present(h(scripting_1.Text, { font: "caption", foregroundStyle: "secondaryLabel" }, "\u52A0\u8F7D\u5931\u8D25\uFF0C\u7B49\u5F85\u4E0B\u6B21\u5237\u65B0"));
-    }
-    catch {
-        // 连兜底都失败就无能为力了
-    }
-});
+main();

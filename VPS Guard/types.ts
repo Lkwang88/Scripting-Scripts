@@ -8,6 +8,8 @@
  * 4. 同一个脚本项目内 index.tsx / widget.tsx / app_intents.tsx 共享同一个 Storage 域，
  *    所以不需要 shared: true。
  * 5. 不使用任何 PRO 功能（Widget.openApp / Spotlight / 重定向规则 / Health 等一律不碰）。
+ * 6. 小组件是纯展示层：只同步读 Storage 快照渲染，绝不做网络请求
+ *    （官方模板同构；探测全部在 App 内完成）。
  */
 
 /** 探测方式 */
@@ -146,20 +148,6 @@ export type Settings = {
   backoffMaxMin: number
   /** 延迟超过这个值显示为「慢」（黄灯，毫秒） */
   degradedMs: number
-  /** 期望的小组件刷新间隔（分钟）。系统只把它当建议 */
-  refreshMinutes: number
-  /** 允许小组件自己发起探测。关掉的话小组件只显示 App 里探测的结果 */
-  probeInWidget: boolean
-  /** 小组件一次最多探测几台，防止渲染超时 */
-  widgetMaxProbes: number
-  /**
-   * 小组件里整轮探测的总时间预算（秒）。
-   * WidgetKit 留给小组件的渲染时间很短，超时会被直接杀掉、显示空白。
-   * 所以小组件里必须有硬预算：到点就停，剩下的机器留给下一次刷新轮转。
-   */
-  widgetBudgetSec: number
-  /** 小组件里单次探测的超时（秒）。比 App 内更短，为了塞进预算 */
-  widgetTimeoutSec: number
   /** 本机联网哨兵地址：探不通它就认为是手机没网，本轮作废 */
   sentinelUrl: string
   /** 显示开关 */
@@ -183,11 +171,6 @@ export const DEFAULT_SETTINGS: Settings = {
   backoffFactor: 2,
   backoffMaxMin: 60,
   degradedMs: 800,
-  refreshMinutes: 15,
-  probeInWidget: true,
-  widgetMaxProbes: 6,
-  widgetBudgetSec: 12,
-  widgetTimeoutSec: 2,
   sentinelUrl: "https://1.1.1.1/cdn-cgi/trace",
   showRtt: true,
   showGeo: true,

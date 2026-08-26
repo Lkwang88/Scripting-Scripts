@@ -9,6 +9,8 @@
  * 4. 同一个脚本项目内 index.tsx / widget.tsx / app_intents.tsx 共享同一个 Storage 域，
  *    所以不需要 shared: true。
  * 5. 不使用任何 PRO 功能（Widget.openApp / Spotlight / 重定向规则 / Health 等一律不碰）。
+ * 6. 小组件是纯展示层：只同步读 Storage 快照渲染，绝不做网络请求
+ *    （官方模板同构；探测全部在 App 内完成）。
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_PROBE = exports.DEFAULT_SETTINGS = void 0;
@@ -26,11 +28,6 @@ exports.DEFAULT_SETTINGS = {
     backoffFactor: 2,
     backoffMaxMin: 60,
     degradedMs: 800,
-    refreshMinutes: 15,
-    probeInWidget: true,
-    widgetMaxProbes: 6,
-    widgetBudgetSec: 12,
-    widgetTimeoutSec: 2,
     sentinelUrl: "https://1.1.1.1/cdn-cgi/trace",
     showRtt: true,
     showGeo: true,
