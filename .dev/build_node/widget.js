@@ -20,6 +20,7 @@ const scripting_1 = require("scripting");
 const types_1 = require("./types");
 const store_1 = require("./store");
 const probe_1 = require("./probe");
+const app_intents_1 = require("./app_intents");
 const format_1 = require("./format");
 // ---------------------------------------------------------------- 布局预算
 /**
@@ -123,7 +124,9 @@ function Header({ t, snap, compact, }) {
                 : "wifi.slash", imageScale: compact ? "small" : "medium", foregroundStyle: snap.networkOk ? (0, types_1.statusColor)(overall) : "systemGray", widgetAccentable: true }),
         h(scripting_1.Text, { font: compact ? "caption" : "footnote", fontWeight: "semibold", foregroundStyle: "label", widgetAccentable: true }, snap.networkOk ? `${t.online}/${t.total} 在线` : "本机无网络"),
         h(scripting_1.Spacer, null),
-        snap.updatedAt > 0 ? (h(scripting_1.Text, { font: "caption2", foregroundStyle: "tertiaryLabel" }, (0, format_1.relTimeShort)(snap.updatedAt))) : null));
+        snap.updatedAt > 0 ? (h(scripting_1.Text, { font: "caption2", foregroundStyle: "tertiaryLabel" }, (0, format_1.relTimeShort)(snap.updatedAt))) : null,
+        h(scripting_1.Button, { intent: (0, app_intents_1.RefreshIntent)(undefined) },
+            h(scripting_1.Image, { systemName: "arrow.clockwise", imageScale: compact ? "small" : "medium", widgetAccentable: true }))));
 }
 /** 没有主机时的引导 */
 function Empty() {
@@ -226,8 +229,9 @@ async function render() {
             });
             (0, store_1.saveSnapshot)(snap);
         }
-        catch {
+        catch (e) {
             // 探测失败就用上次的快照渲染
+            console.log("[widget] 探测失败:", String(e?.message ?? e));
         }
     }
     const sorted = (0, store_1.sortHosts)(hosts, snap, settings.sortMode);

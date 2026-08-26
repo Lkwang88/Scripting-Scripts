@@ -16,6 +16,7 @@
  */
 
 import {
+  Button,
   Circle,
   Capsule,
   HStack,
@@ -44,6 +45,7 @@ import {
   stateOf,
 } from "./store"
 import { runRound } from "./probe"
+import { RefreshIntent } from "./app_intents"
 import {
   fmtRtt,
   overallStatus,
@@ -264,6 +266,13 @@ function Header({
           {relTimeShort(snap.updatedAt)}
         </Text>
       ) : null}
+      <Button intent={RefreshIntent(undefined)}>
+        <Image
+          systemName="arrow.clockwise"
+          imageScale={compact ? "small" : "medium"}
+          widgetAccentable
+        />
+      </Button>
     </HStack>
   )
 }
@@ -482,8 +491,9 @@ async function render() {
         budgetMs: WIDGET_BUDGET_MS,
       })
       saveSnapshot(snap)
-    } catch {
+    } catch (e) {
       // 探测失败就用上次的快照渲染
+      console.log("[widget] 探测失败:", String((e as { message?: string })?.message ?? e))
     }
   }
 
