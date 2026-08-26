@@ -39,9 +39,11 @@ import {
   loadHosts,
   loadSettings,
   loadSnapshot,
+  saveSnapshot,
   sortHosts,
   stateOf,
 } from "./store"
+import { runRound } from "./probe"
 import {
   fmtRtt,
   overallStatus,
@@ -445,9 +447,16 @@ function ListView({
 
 // ---------------------------------------------------------------- 入口
 
-function main() {
+// 小组件探测的固定安全参数（不进设置页，避免误配出白屏）：
+// 每轮只探 2 台最久没探的（按 lastProbeAt 轮转，几次刷新覆盖全部），
+// 禁用重试、单次 2s、总预算 6s —— 到点立刻渲染。
+const WIDGET_PROBE_LIMIT = 2
+const WIDGET_TIMEOUT_SEC = 2
+const WIDGET_BUDGET_MS = 6000
+
+async function main() {
   try {
-    render()
+    await render()
   } catch {
     // 任何异常都要给出可见内容，绝不白屏
     Widget.present(
@@ -456,15 +465,27 @@ function main() {
   }
 }
 
-function render() {
+async function render() {
   const family = Widget.family
   const settings = loadSettings()
   const hosts = loadHosts()
-  // 只读快照，纯同步渲染 —— 与官方小组件模板完全同构。
-  // 官方模式：present 之前的数据准备必须是同步的；小组件里不做任何
-  // 网络请求（WidgetKit 的执行窗口极短，await 期间进程可能被挂起，
-  // present 永远执行不到，表现为白屏）。数据刷新在 App 内完成。
-  const snap = loadSnapshot()
+  let snap = loadSnapshot()
+
+  // 系统每次刷新小组件时顺手探几台 —— 数据新鲜度就来自这里。
+  // v1.0.3 曾把这段砍掉（当时误判白屏根因是异步探测，真凶是 Widget
+  // 未导入），结果小组件永远画旧快照，时间戳只有打开 App 才会动。
+  if (hosts.length > 0) {
+    try {
+      const wSettings = { ...settings, timeoutSec: WIDGET_TIMEOUT_SEC, retries: 0 }
+      snap = await runRound(hosts, snap, wSettings, {
+        limit: WIDGET_PROBE_LIMIT,
+        budgetMs: WIDGET_BUDGET_MS,
+      })
+      saveSnapshot(snap)
+    } catch {
+      // 探测失败就用上次的快照渲染
+    }
+  }
 
   const sorted = sortHosts(hosts, snap, settings.sortMode)
   const t = tally(sorted.map(x => (x.paused === true ? "unknown" : stateOf(snap, x.id).status)))
@@ -526,8 +547,11 @@ function render() {
     </VStack>
   )
 
-  // 官方模板同款裸调用：同步、无参数，刷新节奏交给系统
-  Widget.present(root)
+  // 给系统一个明确的刷新时间点（文档支持的形态）。
+  // 注意：这只是「请求」，iOS 按预算调度，实际通常 15~60 分钟一次，
+  // 手机闲置/夜间会更懒 —— 这是平台天花板，不是 bug。
+  const next = new Date(Date.now() + Math.max(5, settings.refreshMinutes) * 60_000)
+  Widget.present(root, { policy: "after", date: next })
 }
 
 main()

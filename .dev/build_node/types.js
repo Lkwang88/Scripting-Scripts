@@ -28,6 +28,8 @@ exports.DEFAULT_SETTINGS = {
     backoffFactor: 2,
     backoffMaxMin: 60,
     degradedMs: 800,
+    refreshMinutes: 15,
+    probeInWidget: true,
     sentinelUrl: "https://1.1.1.1/cdn-cgi/trace",
     showRtt: true,
     showGeo: true,

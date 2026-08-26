@@ -54,8 +54,12 @@ global.Script = {
   exit: () => {},
   createOpenURLScheme: name => `scripting://run/${name}`,
 }
-// 网络全部失败 → 走「本机无网络」分支
-global.fetch = async () => { throw new Error("network down (test)") }
+// 网络模拟：MOCK_NET=ok 时哨兵和主机探测全部成功；否则全部失败
+if (process.env.MOCK_NET === "ok") {
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) })
+} else {
+  global.fetch = async () => { throw new Error("network down (test)") }
+}
 global.setTimeout = global.setTimeout // node 自带
 global.clearTimeout = global.clearTimeout
 
@@ -148,6 +152,14 @@ async function main() {
   console.log(`✓ Widget.present 被调用 ${presentCalls.length} 次`)
   const c = presentCalls[0]
   console.log("  reloadPolicy:", JSON.stringify(c.opts))
+  if (process.env.MOCK_NET === "ok") {
+    const okPolicy = c.opts && c.opts.policy === "after" && c.opts.date instanceof Date
+    console.log("  after 日期刷新策略:", okPolicy ? "✓" : "✗ 缺失")
+    const snapRaw = storeData["vpsguard.snapshot.v1"]
+    const snap = snapRaw ? JSON.parse(snapRaw) : null
+    const st = snap && snap.states && snap.states.test1
+    console.log("  快照已随探测更新:", st && st.status === "online" ? `✓ status=${st.status} rtt=${st.rtt}` : "✗ 未更新")
+  }
   console.log("  根元素 type:", c.el.type)
   const flat = JSON.stringify(c.el, (k, v) => (k === "children" ? undefined : v))
   console.log("  根元素 props keys:", Object.keys(c.el.props ?? {}))

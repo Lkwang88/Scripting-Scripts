@@ -2,7 +2,7 @@
   "name": "VPS Guard",
   "icon": "server.rack",
   "color": "rgba(48, 209, 88, 1)",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "监测多台 VPS 在线状态的主屏小组件：TCP/HTTP/ICMP 探测、退避重试、归属地识别、延迟历史与自适应排版。",
   "author": {
     "name": "Lkwang88",

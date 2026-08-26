@@ -19,6 +19,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const scripting_1 = require("scripting");
 const types_1 = require("./types");
 const store_1 = require("./store");
+const probe_1 = require("./probe");
 const format_1 = require("./format");
 // ---------------------------------------------------------------- 布局预算
 /**
@@ -193,24 +194,42 @@ function ListView({ hosts, snap, settings, family, t, }) {
             " \u53F0\u672A\u663E\u793A")) : null));
 }
 // ---------------------------------------------------------------- 入口
-function main() {
+// 小组件探测的固定安全参数（不进设置页，避免误配出白屏）：
+// 每轮只探 2 台最久没探的（按 lastProbeAt 轮转，几次刷新覆盖全部），
+// 禁用重试、单次 2s、总预算 6s —— 到点立刻渲染。
+const WIDGET_PROBE_LIMIT = 2;
+const WIDGET_TIMEOUT_SEC = 2;
+const WIDGET_BUDGET_MS = 6000;
+async function main() {
     try {
-        render();
+        await render();
     }
     catch {
         // 任何异常都要给出可见内容，绝不白屏
         scripting_1.Widget.present(h(scripting_1.Text, { font: "caption", foregroundStyle: "secondaryLabel" }, "\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u6253\u5F00 App \u5237\u65B0"));
     }
 }
-function render() {
+async function render() {
     const family = scripting_1.Widget.family;
     const settings = (0, store_1.loadSettings)();
     const hosts = (0, store_1.loadHosts)();
-    // 只读快照，纯同步渲染 —— 与官方小组件模板完全同构。
-    // 官方模式：present 之前的数据准备必须是同步的；小组件里不做任何
-    // 网络请求（WidgetKit 的执行窗口极短，await 期间进程可能被挂起，
-    // present 永远执行不到，表现为白屏）。数据刷新在 App 内完成。
-    const snap = (0, store_1.loadSnapshot)();
+    let snap = (0, store_1.loadSnapshot)();
+    // 系统每次刷新小组件时顺手探几台 —— 数据新鲜度就来自这里。
+    // v1.0.3 曾把这段砍掉（当时误判白屏根因是异步探测，真凶是 Widget
+    // 未导入），结果小组件永远画旧快照，时间戳只有打开 App 才会动。
+    if (hosts.length > 0) {
+        try {
+            const wSettings = { ...settings, timeoutSec: WIDGET_TIMEOUT_SEC, retries: 0 };
+            snap = await (0, probe_1.runRound)(hosts, snap, wSettings, {
+                limit: WIDGET_PROBE_LIMIT,
+                budgetMs: WIDGET_BUDGET_MS,
+            });
+            (0, store_1.saveSnapshot)(snap);
+        }
+        catch {
+            // 探测失败就用上次的快照渲染
+        }
+    }
     const sorted = (0, store_1.sortHosts)(hosts, snap, settings.sortMode);
     const t = (0, format_1.tally)(sorted.map(x => (x.paused === true ? "unknown" : (0, store_1.stateOf)(snap, x.id).status)));
     const bad = sorted
@@ -244,7 +263,10 @@ function render() {
     // 锁屏配件不要自绘背景，交给系统
     const isAccessory = family.startsWith("accessory");
     const root = isAccessory ? (body) : (h(scripting_1.VStack, { frame: { maxWidth: "infinity", maxHeight: "infinity", alignment: "topLeading" }, padding: { horizontal: 12, vertical: 10 }, widgetBackground: "systemBackground" }, body));
-    // 官方模板同款裸调用：同步、无参数，刷新节奏交给系统
-    scripting_1.Widget.present(root);
+    // 给系统一个明确的刷新时间点（文档支持的形态）。
+    // 注意：这只是「请求」，iOS 按预算调度，实际通常 15~60 分钟一次，
+    // 手机闲置/夜间会更懒 —— 这是平台天花板，不是 bug。
+    const next = new Date(Date.now() + Math.max(5, settings.refreshMinutes) * 60000);
+    scripting_1.Widget.present(root, { policy: "after", date: next });
 }
 main();
