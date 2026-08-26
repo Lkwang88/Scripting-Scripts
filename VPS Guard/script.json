@@ -1,8 +1,15 @@
 {
   "name": "VPS Guard",
   "icon": "server.rack",
-  "color": "rgba(10, 132, 255, 1)",
+  "color": "rgba(48, 209, 88, 1)",
   "version": "1.0.0",
-  "description": "Check whether your VPS hosts are reachable, with a colour-coded home screen widget, per-host aliases, and automatic IP geolocation.",
-  "runInApp": false
+  "description": "监测多台 VPS 在线状态的主屏小组件：TCP/HTTP/ICMP 探测、退避重试、归属地识别、延迟历史与自适应排版。",
+  "author": {
+    "name": "Lkwang88",
+    "homepage": "https://github.com/Lkwang88"
+  },
+  "remoteResource": {
+    "url": "https://github.com/Lkwang88/Scripting-Scripts/tree/main/VPS%20Guard",
+    "autoUpdateInterval": 21600
+  }
 }
