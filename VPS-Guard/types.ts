@@ -233,8 +233,19 @@ export function countryFlag(code?: string): string {
   )
 }
 
+/**
+ * 状态灯色的字面量联合。
+ * 真机的 ShapeStyle 不接受宽泛 string —— 只认具体颜色字面量
+ * （KeywordsColor），所以这里必须返回联合类型而不是 string。
+ */
+export type StatusColor =
+  | "systemGreen"
+  | "systemRed"
+  | "systemOrange"
+  | "systemGray"
+
 /** 状态对应的灯色。语义集中在这里，UI 各处不要各写一套 */
-export function statusColor(status: Status): string {
+export function statusColor(status: Status): StatusColor {
   switch (status) {
     case "online":
       return "systemGreen"

@@ -72,7 +72,7 @@ function densityFor(family, count, settings) {
  * 状态灯。外圈用同色低透明度做一层光晕，比纯色圆点显得精致，
  * 而且离线时红色更醒目。两个视图换一点质感，值得。
  */
-function Dot({ status, size }) {
+function Dot({ status, size, }) {
     const color = (0, types_1.statusColor)(status);
     return (h(scripting_1.ZStack, { frame: { width: size + 6, height: size + 6 } },
         h(scripting_1.Circle, { fill: color, opacity: 0.22, frame: { width: size + 6, height: size + 6 } }),
@@ -143,7 +143,7 @@ function CircularView({ t }) {
         h(scripting_1.Circle, { trim: { from: 0, to: Math.max(0.02, ratio) }, stroke: {
                 shapeStyle: (0, types_1.statusColor)((0, format_1.overallStatus)(t)),
                 strokeStyle: { lineWidth: 5, lineCap: "round" },
-            }, rotationEffect: { degrees: -90 } }),
+            }, rotationEffect: { degrees: -90, anchor: "center" } }),
         h(scripting_1.VStack, { spacing: 0 },
             h(scripting_1.Text, { font: "caption", fontWeight: "bold", monospacedDigit: true }, t.online),
             h(scripting_1.Text, { font: "caption2", foregroundStyle: "secondaryLabel", monospacedDigit: true },

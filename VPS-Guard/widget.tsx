@@ -35,6 +35,7 @@ import {
   type Settings,
   type Snapshot,
   statusColor,
+  type Status,
 } from "./types"
 import {
   loadHosts,
@@ -118,8 +119,14 @@ function densityFor(family: string, count: number, settings: Settings): Density 
  * 状态灯。外圈用同色低透明度做一层光晕，比纯色圆点显得精致，
  * 而且离线时红色更醒目。两个视图换一点质感，值得。
  */
-function Dot({ status, size }: { status: string; size: number }): VirtualNode {
-  const color = statusColor(status as never)
+function Dot({
+  status,
+  size,
+}: {
+  status: Status
+  size: number
+}): VirtualNode {
+  const color = statusColor(status)
   return (
     <ZStack frame={{ width: size + 6, height: size + 6 }}>
       <Circle fill={color} opacity={0.22} frame={{ width: size + 6, height: size + 6 }} />
@@ -308,7 +315,7 @@ function CircularView({ t }: { t: Tally }): VirtualNode {
           shapeStyle: statusColor(overallStatus(t)),
           strokeStyle: { lineWidth: 5, lineCap: "round" },
         }}
-        rotationEffect={{ degrees: -90 }}
+        rotationEffect={{ degrees: -90, anchor: "center" }}
       />
       <VStack spacing={0}>
         <Text font="caption" fontWeight="bold" monospacedDigit>

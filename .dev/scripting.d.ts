@@ -119,8 +119,31 @@ declare module "scripting" {
   export type VirtualNode = ScriptingVNode
 
   // ------------------------------------------------------ 基础类型
-  export type Color = string
-  export type ShapeStyle = string | object
+  // Color：文档 KeywordsColor 全集 + HEX/RGBA 模板（真机声明不接受裸 string）
+  export type Color =
+    | `#${string}`
+    | `rgba(${string})`
+    | "accentColor"
+    | "systemRed" | "systemGreen" | "systemBlue" | "systemOrange" | "systemYellow"
+    | "systemPink" | "systemPurple" | "systemTeal" | "systemIndigo"
+    | "systemBrown" | "systemMint" | "systemCyan"
+    | "systemGray" | "systemGray2" | "systemGray3" | "systemGray4"
+    | "systemGray5" | "systemGray6"
+    | "label" | "secondaryLabel" | "tertiaryLabel" | "quaternaryLabel"
+    | "systemFill" | "secondarySystemFill" | "tertiarySystemFill"
+    | "quaternarySystemFill"
+    | "systemBackground" | "secondarySystemBackground" | "tertiarySystemBackground"
+    | "systemGroupedBackground" | "secondarySystemGroupedBackground"
+    | "tertiarySystemGroupedBackground"
+    | "separator" | "opaqueSeparator"
+    | "black" | "darkGray" | "lightGray" | "white" | "gray" | "red" | "green"
+    | "blue" | "cyan" | "yellow" | "magenta" | "orange" | "purple" | "brown"
+    | "clear"
+  export type Material =
+    | "ultraThinMaterial" | "thinMaterial" | "regularMaterial"
+    | "thickMaterial" | "barMaterial"
+  // 渐变等复杂样式以 object 兜底；裸 string 不再被接受（与真机一致）
+  export type ShapeStyle = Color | Material | object
   export type DynamicShapeStyle = { light: ShapeStyle; dark: ShapeStyle }
   export type Alignment =
     | "center"
@@ -224,7 +247,13 @@ declare module "scripting" {
     shadow?: { radius: number; color?: Color; x?: number; y?: number }
     border?: { style: ShapeStyle; width?: number }
     offset?: { x?: number; y?: number }
-    rotationEffect?: { degrees: number; anchor?: Alignment }
+    rotationEffect?: {
+      degrees: number
+      anchor:
+        | "center" | "top" | "bottom" | "leading" | "trailing"
+        | "topLeading" | "topTrailing" | "bottomLeading" | "bottomTrailing"
+        | { x: number; y: number }
+    }
     scaleEffect?: number | { x?: number; y?: number; anchor?: Alignment }
     zIndex?: number
     /** Picker 选项标记值（文档要求 Picker 的每个子项带 tag） */

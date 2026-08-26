@@ -81,8 +81,7 @@ async function resolveDomain(domain, timeoutSec = 8) {
     ];
     for (const url of endpoints) {
         try {
-            console.log("  [call] fetch===global.fetch:", fetch === global.fetch, "| global.fetch.name:", global.fetch.name);
-        const resp = await fetch(url, {
+            const resp = await fetch(url, {
                 headers: { accept: "application/dns-json" },
                 timeout: timeoutSec,
             });
@@ -164,7 +163,6 @@ async function lookupGeo(ip) {
 }
 /** 一次 fetch 探测。核心逻辑：快速失败=在线，超时=离线 */
 async function probeOnceHttp(ip, port, https, path, expectStatus, timeoutSec) {
-    console.log("  [probeOnceHttp] 进入 | fetch.name:", JSON.stringify(fetch === global.fetch ? "同引用" : "不同引用"), "| name:", JSON.stringify(fetch.name), "| global.fetch.name:", JSON.stringify(global.fetch.name));
     const scheme = https ? "https" : "http";
     const url = `${scheme}://${hostForUrl(ip)}:${port}${path || "/"}`;
     const started = Date.now();

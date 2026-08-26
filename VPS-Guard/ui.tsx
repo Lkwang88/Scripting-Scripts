@@ -22,6 +22,7 @@ import {
   type Settings,
   statusColor,
   statusLabel,
+  type StatusColor,
 } from "./types"
 import {
   fmtRtt,
@@ -315,7 +316,7 @@ export function DetailRow({
   label: string
   value: string
   mono?: boolean
-  color?: string
+  color?: StatusColor
 }): VirtualNode {
   return (
     <HStack>
