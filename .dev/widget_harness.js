@@ -115,7 +115,7 @@ const tsc = path.join(__dirname, "node_modules", "typescript", "lib", "tsc.js")
 const repoRoot = path.dirname(__dirname)
 try {
   execSync(
-    `node "${tsc}" "VPS Guard/widget.tsx" ".dev/scripting.d.ts" --outDir "${buildDir}" --module commonjs ` +
+    `node "${tsc}" "VPS-Guard/widget.tsx" ".dev/scripting.d.ts" --outDir "${buildDir}" --module commonjs ` +
       `--target es2020 --moduleResolution node --esModuleInterop --skipLibCheck ` +
       `--jsx react --jsxFactory h --strict false --noUnusedLocals false --lib es2020`,
     { cwd: repoRoot, stdio: "pipe" },

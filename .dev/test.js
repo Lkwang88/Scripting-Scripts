@@ -14,10 +14,10 @@ global.Storage = {
   contains: k => k in _store,
 }
 
-const T = require("./build/VPS Guard/types.js")
-const S = require("./build/VPS Guard/store.js")
-const P = require("./build/VPS Guard/probe.js")
-const F = require("./build/VPS Guard/format.js")
+const T = require("./build/VPS-Guard/types.js")
+const S = require("./build/VPS-Guard/store.js")
+const P = require("./build/VPS-Guard/probe.js")
+const F = require("./build/VPS-Guard/format.js")
 
 let pass = 0, fail = 0
 const fails = []

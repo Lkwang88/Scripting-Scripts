@@ -14,9 +14,9 @@
   },
   "include": [
     "scripting.d.ts",
-    "../VPS Guard/types.ts",
-    "../VPS Guard/store.ts",
-    "../VPS Guard/probe.ts",
-    "../VPS Guard/format.ts"
+    "../VPS-Guard/types.ts",
+    "../VPS-Guard/store.ts",
+    "../VPS-Guard/probe.ts",
+    "../VPS-Guard/format.ts"
   ]
 }

@@ -16,7 +16,7 @@
   },
   "include": [
     "scripting.d.ts",
-    "../VPS Guard/*.ts",
-    "../VPS Guard/*.tsx"
+    "../VPS-Guard/*.ts",
+    "../VPS-Guard/*.tsx"
   ]
 }

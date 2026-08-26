@@ -6,7 +6,7 @@
 
 | 项目 | 说明 |
 |---|---|
-| [VPS Guard](./VPS%20Guard) | VPS 在线状态红绿灯，主屏小组件 + 主 App 管理 |
+| [VPS Guard](./VPS-Guard) | VPS 在线状态红绿灯，主屏小组件 + 主 App 管理 |
 
 ## 目录约定
 
@@ -38,7 +38,7 @@ Scripting-Scripts/
 **一次性导入**——把 GitHub 目录 URL 贴到 [import_scripts](https://scripting.fun/import_scripts) 生成导入链接，在手机上打开：
 
 ```text
-https://github.com/<owner>/<repo>/tree/main/VPS%20Guard
+https://github.com/<owner>/<repo>/tree/main/VPS-Guard
 ```
 
 **远程同步（推荐，可自动更新）**——导入后在 App 里给项目配置远程资源。`script.json` 支持 `remoteResource` 字段，App 会按间隔自动拉取更新：
@@ -46,7 +46,7 @@ https://github.com/<owner>/<repo>/tree/main/VPS%20Guard
 ```json
 {
   "remoteResource": {
-    "url": "https://github.com/<owner>/<repo>/tree/main/VPS%20Guard",
+    "url": "https://github.com/<owner>/<repo>/tree/main/VPS-Guard",
     "autoUpdateInterval": 21600
   }
 }
