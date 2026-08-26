@@ -593,6 +593,35 @@ export type RoundOptions = {
    * 有了预算，宁可这轮少探几台，也不能整个小组件挂掉。
    */
   budgetMs?: number
+  /**
+   * 同时探测几台（并发度）。2 是实测甜点：保留并发加速，
+   * 同时不会把手机链路打爆 —— 11 台全并发时 ICMP 延迟从 86ms
+   * 飙到 2000+ms，2 并发回到近百 ms 量级。
+   */
+  concurrency?: number
+}
+
+/**
+ * 并发池：最多 simultaneously 个任务同时跑，跑完补位，保持结果顺序。
+ * Promise.all 全量并发会把手机链路打爆（ICMP 尤其敏感），顺序又太慢，
+ * 2 并发是实测甜点。结果按入参顺序返回，与完成顺序无关。
+ */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = cursor++
+      if (i >= items.length) break
+      results[i] = await fn(items[i], i)
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 /**
@@ -635,26 +664,23 @@ export async function runRound(
     return { updatedAt: now, networkOk: true, states }
   }
 
-  // 并行预算：全量并行时总耗时 ≈ 单台最坏耗时（含重试次数），
-  // 不是台数 × 单台耗时。预算连一台的最坏情况都容不下时，
-  // 保底只探最早到期的一台，避免整轮空转。
+  // 并发预算：2 并发时总耗时 ≈ ceil(台数/2) × 单台最坏耗时。
+  // 预算连一台的最坏情况都容不下时，保底只探最早到期的一台，
+  // 避免整轮空转。正常情况下 2 并发既快又不打爆链路。
+  const concurrency = options.concurrency ?? 2
   const worstCase = settings.timeoutSec * 1000 * (settings.retries + 1)
-  if (options.budgetMs != null && worstCase > options.budgetMs) {
-    const host = batch[0]
+  const runOne = async (host: Host) => {
     const prev = states[host.id] ?? emptyState()
     const result = await probeHost(host, settings, icmpAvailable)
-    states[host.id] = mergeResult(prev, result, settings)
-    options.onEach?.(host.id, states[host.id])
+    const merged = mergeResult(prev, result, settings)
+    states[host.id] = merged
+    options.onEach?.(host.id, merged)
+  }
+
+  if (options.budgetMs != null && worstCase > options.budgetMs) {
+    await runOne(batch[0])
   } else {
-    await Promise.all(
-      batch.map(async host => {
-        const prev = states[host.id] ?? emptyState()
-        const result = await probeHost(host, settings, icmpAvailable)
-        const merged = mergeResult(prev, result, settings)
-        states[host.id] = merged
-        options.onEach?.(host.id, merged)
-      }),
-    )
+    await mapLimit(batch, concurrency, runOne)
   }
 
   return { updatedAt: Date.now(), networkOk: true, states }
