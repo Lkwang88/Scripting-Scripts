@@ -99,10 +99,7 @@ function SettingsPage() {
           }
         >
           <Text font="footnote" foregroundStyle="label">
-            总览（推荐）：● 在线状态 + CPU/内存条 + 吞吐
-          </Text>
-          <Text font="footnote" foregroundStyle="label">
-            ping：电信 / 联通 / 移动三网延迟，丢包标橙
+            总览（推荐）：国旗 + 名字 + 三网延迟（电/联/移）+ 总流量
           </Text>
           <Text font="footnote" foregroundStyle="label">
             resources：CPU / 内存 / 磁盘三条占用

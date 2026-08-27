@@ -2,7 +2,7 @@
   "name": "CFSM Panel",
   "icon": "server.rack",
   "color": "rgba(48, 209, 88, 1)",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CF-Server-Monitor 多机在线面板：一次拉全站监控（在线状态/CPU/内存/磁盘/三网延迟/流量），总览、三网、资源三模式，Large 最多显示约 24 台。",
   "author": {
     "name": "Lkwang88",

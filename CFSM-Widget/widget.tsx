@@ -39,11 +39,13 @@ import { clock, fmtBytes, fmtMs, fmtPct, relTime } from "./format"
 
 type RowDensity = {
   rowFont: "footnote" | "caption" | "caption2"
+  /** 字号基准（pt）—— 字符宽度估算用 */
+  fontBase: number
   dot: number
   barH: number
   barW: number
   spacing: number
-  /** 名字列最大宽度（pt）：主机名长短不齐会导致数值列错位，定宽截断 */
+  /** 名字列固定宽度（pt）：所有行同宽，超长内容就地截断（".."） */
   nameMax: number
 }
 
@@ -53,26 +55,29 @@ function densityFor(family: string, count: number): RowDensity {
     const roomy = count <= 12
     return {
       rowFont: roomy ? "footnote" : "caption2",
+      fontBase: roomy ? 13 : 11,
       dot: roomy ? 9 : 7,
       barH: roomy ? 7 : 5,
       barW: roomy ? 34 : 24,
       spacing: roomy ? 5 : 3,
-      nameMax: roomy ? 76 : 70,
+      nameMax: roomy ? 80 : 66,
     }
   }
   if (family === "systemMedium") {
     return {
       rowFont: "caption",
+      fontBase: 12,
       dot: 8,
       barH: 6,
       barW: 28,
       spacing: 4,
-      nameMax: 64,
+      nameMax: 60,
     }
   }
   // systemSmall —— 只给摘要，不做列表
   return {
     rowFont: "caption2",
+    fontBase: 11,
     dot: 7,
     barH: 5,
     barW: 20,
@@ -81,10 +86,24 @@ function densityFor(family: string, count: number): RowDensity {
   }
 }
 
-/** 名字列宽度：按字符数估算（中文≈9.5pt，英文≈6pt），封顶 nameMax */
-function nameWidth(s: CfsmServer, d: RowDensity): number {
-  const per = d.rowFont === "caption2" ? 8 : 10
-  return Math.min(d.nameMax, Math.max(20, s.name.length * per + 6))
+/**
+ * 名字截断：按字符类型估算宽度（中文/全角 ≈ 1em，ASCII ≈ 0.55em），
+ * 超过 nameMax 就从尾部截断补 ".."。所有行名字列同宽 → 数值列对齐。
+ */
+const CJK_RE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F]/
+function charW(ch: string, base: number): number {
+  return CJK_RE.test(ch) ? base : base * 0.55
+}
+function truncateName(name: string, maxW: number, base: number): string {
+  const dots = ".."
+  const budget = maxW - 2 * base * 0.55
+  let w = 0
+  for (let i = 0; i < name.length; i++) {
+    const cw = charW(name[i], base)
+    if (w + cw > budget) return name.slice(0, i) + dots
+    w += cw
+  }
+  return name
 }
 
 /** 数值列固定宽度（右对齐）：百分比 3 字符 / 网速 5 字符 / 延迟 4 字符 */
@@ -135,12 +154,14 @@ function usageColor(pct: number): PanelColor {
 }
 
 /**
- * 单台行（总览模式）：● 名字   77 / 127 / 78   119G
- * 三网延迟按 电信/联通/移动 排序（丢包>10% 或 ≥500ms 标橙，离线标红）
- * 总流量 = 累计下行 + 累计上行（net_rx + net_tx）
+ * 单台行（总览模式）：🇸🇬 新加坡   77 / 127 / 78   119G
+ * 国旗固定排第一（区域码空时占位空格）；名字列定宽截断（".."）；
+ * 三网延迟按固定宽度右对齐；流量在最后（不影响对齐）。
+ * 离线：整行降透明 + 名字标红，延迟/流量显示 "—"。
  */
 function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
   const off = !s.online
+  const flag = flagEmoji(s.region) || "  "
 
   const pingCell = (ms: number, loss: number, isLast: boolean) => {
     const bad = ms >= 500 || loss > 10
@@ -166,17 +187,19 @@ function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
   }
 
   return (
-    <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
-      <Dot online={s.online} size={d.dot} />
+    <HStack spacing={d.spacing} opacity={off ? 0.5 : 1}>
+      <Text font={d.rowFont} lineLimit={1} frame={{ width: 20, alignment: "leading" }}>
+        {flag}
+      </Text>
       <Text
         font={d.rowFont}
         fontWeight="medium"
         lineLimit={1}
         minScaleFactor={0.8}
-        foregroundStyle="label"
-        frame={{ width: nameWidth(s, d), alignment: "leading" }}
+        foregroundStyle={off ? "systemRed" : "label"}
+        frame={{ width: d.nameMax, alignment: "leading" }}
       >
-        {s.name}
+        {truncateName(s.name, d.nameMax, d.fontBase)}
       </Text>
 
       <Spacer minLength={2} />
@@ -185,7 +208,7 @@ function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
       {pingCell(s.pingCu, s.lossCu, false)}
       {pingCell(s.pingCm, s.lossCm, true)}
 
-      <Spacer minLength={10} />
+      <Spacer minLength={8} />
 
       <Text
         font={d.rowFont}
@@ -216,9 +239,9 @@ function ResourceRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
         lineLimit={1}
         minScaleFactor={0.8}
         foregroundStyle="label"
-        frame={{ width: nameWidth(s, d), alignment: "leading" }}
+        frame={{ width: d.nameMax, alignment: "leading" }}
       >
-        {s.name}
+        {truncateName(s.name, d.nameMax, d.fontBase)}
       </Text>
       <Spacer minLength={2} />
       {bar(s.cpu)}
