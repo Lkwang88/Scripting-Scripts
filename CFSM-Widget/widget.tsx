@@ -13,6 +13,7 @@
  */
 
 import {
+  Button,
   Capsule,
   Circle,
   HStack,
@@ -27,6 +28,7 @@ import {
 
 import { type CfsmServer, type CfsmSnapshot, type PanelColor, type WidgetMode } from "./types"
 import { loadForWidget, loadSettings } from "./api"
+import { RefreshIntent } from "./app_intents"
 import { clock, flagEmoji, fmtBytes, fmtMs, fmtPct, relTime } from "./format"
 
 // ---------------------------------------------------------------- 布局预算
@@ -47,6 +49,8 @@ type RowDensity = {
   showBars: boolean
   showNet: boolean
   spacing: number
+  /** 名字列最大宽度（pt）：主机名长短不齐会导致数值列错位，定宽截断 */
+  nameMax: number
 }
 
 function densityFor(family: string, count: number): RowDensity {
@@ -62,6 +66,7 @@ function densityFor(family: string, count: number): RowDensity {
       showBars: roomy,
       showNet: roomy,
       spacing: roomy ? 5 : 3,
+      nameMax: roomy ? 88 : 78,
     }
   }
   if (family === "systemMedium") {
@@ -74,6 +79,7 @@ function densityFor(family: string, count: number): RowDensity {
       showBars: false,
       showNet: true,
       spacing: 4,
+      nameMax: 70,
     }
   }
   // systemSmall —— 只给摘要，不做列表
@@ -86,8 +92,19 @@ function densityFor(family: string, count: number): RowDensity {
     showBars: false,
     showNet: false,
     spacing: 3,
+    nameMax: 0,
   }
 }
+
+/** 名字列宽度：按字符数估算（中文≈9pt，英文≈5.5pt），封顶 nameMax */
+function nameWidth(s: CfsmServer, d: RowDensity): number {
+  const per = d.rowFont === "caption2" ? 8 : 10
+  return Math.min(d.nameMax, Math.max(20, s.name.length * per + 6))
+}
+
+/** 数值列固定宽度（右对齐）：百分比 3 字符 / 网速 5 字符 */
+const PCT_W = 30
+const NET_W = 46
 
 // ---------------------------------------------------------------- 零件
 
@@ -147,24 +164,33 @@ function OverviewRow({
   ) : d.showBars ? (
     <HStack spacing={d.spacing}>
       <MiniBar pct={s.cpu} width={d.barW} height={d.barH} color={usageColor(s.cpu)} />
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9}>
+      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
         {fmtPct(s.cpu)}
       </Text>
       <MiniBar pct={s.ramPct} width={d.barW} height={d.barH} color={usageColor(s.ramPct)} />
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9}>
+      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
         {fmtPct(s.ramPct)}
       </Text>
       {d.showNet ? (
-        <Text font="caption2" monospacedDigit foregroundStyle="tertiaryLabel">
+        <Text font="caption2" monospacedDigit foregroundStyle="tertiaryLabel" frame={{ width: NET_W, alignment: "trailing" }}>
           ↓{fmtBytes(s.netIn)}
         </Text>
       ) : null}
     </HStack>
   ) : (
-    <Text font={d.rowFont} monospacedDigit foregroundStyle="secondaryLabel">
-      {fmtPct(s.cpu)} {fmtPct(s.ramPct)}
-      {d.showNet ? ` ↓${fmtBytes(s.netIn)}` : ""}
-    </Text>
+    <HStack spacing={d.spacing}>
+      <Text font={d.rowFont} monospacedDigit foregroundStyle="secondaryLabel" frame={{ width: PCT_W, alignment: "trailing" }}>
+        {fmtPct(s.cpu)}
+      </Text>
+      <Text font={d.rowFont} monospacedDigit foregroundStyle="secondaryLabel" frame={{ width: PCT_W, alignment: "trailing" }}>
+        {fmtPct(s.ramPct)}
+      </Text>
+      {d.showNet ? (
+        <Text font={d.rowFont} monospacedDigit foregroundStyle="tertiaryLabel" frame={{ width: NET_W, alignment: "trailing" }}>
+          ↓{fmtBytes(s.netIn)}
+        </Text>
+      ) : null}
+    </HStack>
   )
   return (
     <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
@@ -173,8 +199,9 @@ function OverviewRow({
         font={d.rowFont}
         fontWeight="medium"
         lineLimit={1}
-        minScaleFactor={0.85}
+        minScaleFactor={0.8}
         foregroundStyle="label"
+        frame={{ width: nameWidth(s, d), alignment: "leading" }}
       >
         {s.name}
       </Text>
@@ -207,6 +234,7 @@ function PingRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
           foregroundStyle={off ? "systemRed" : bad ? "systemOrange" : "secondaryLabel"}
           lineLimit={1}
           minScaleFactor={0.8}
+          frame={{ width: 34, alignment: "trailing" }}
         >
           {off ? "—" : `${fmtMs(ms)}`}
         </Text>
@@ -216,7 +244,7 @@ function PingRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
   return (
     <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
       <Dot online={s.online} size={d.dot} />
-      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.85} foregroundStyle="label">
+      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.8} foregroundStyle="label" frame={{ width: nameWidth(s, d), alignment: "leading" }}>
         {s.name}
       </Text>
       {flagEmoji(s.region) ? (
@@ -243,22 +271,22 @@ function ResourceRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
   return (
     <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
       <Dot online={s.online} size={d.dot} />
-      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.85} foregroundStyle="label">
+      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.8} foregroundStyle="label" frame={{ width: nameWidth(s, d), alignment: "leading" }}>
         {s.name}
       </Text>
       <Spacer minLength={2} />
       {bar(s.cpu)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9}>
+      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
         {fmtPct(s.cpu)}
       </Text>
       <Spacer minLength={4} />
       {bar(s.ramPct)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9}>
+      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
         {fmtPct(s.ramPct)}
       </Text>
       <Spacer minLength={4} />
       {bar(s.diskPct)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9}>
+      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
         {fmtPct(s.diskPct)}
       </Text>
     </HStack>
@@ -309,7 +337,7 @@ function Header({
   )
 }
 
-/** 底部：数据时间与离线汇总 */
+/** 底部：数据时间、离线汇总 与 立即刷新按钮 */
 function Footer({ snap, stale }: { snap: CfsmSnapshot; stale: boolean }): VirtualNode {
   return (
     <HStack spacing={6}>
@@ -326,6 +354,13 @@ function Footer({ snap, stale }: { snap: CfsmSnapshot; stale: boolean }): Virtua
       <Text font="caption2" foregroundStyle="tertiaryLabel" lineLimit={1} minScaleFactor={0.8}>
         {stale ? `缓存 ${relTime(snap.savedAt, Date.now())}` : clock(snap.savedAt)}
       </Text>
+      <Button intent={RefreshIntent(undefined)}>
+        <Image
+          systemName="arrow.clockwise"
+          imageScale="small"
+          widgetAccentable
+        />
+      </Button>
     </HStack>
   )
 }

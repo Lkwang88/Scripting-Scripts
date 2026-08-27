@@ -5,7 +5,6 @@
  */
 import {
   Button,
-  Dialog,
   List,
   Navigation,
   NavigationStack,
@@ -23,26 +22,30 @@ function SettingsPage() {
   const [baseURL, setBaseURL] = useState(initial.baseURL)
   const [token, setToken] = useState(initial.token ?? "")
   const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState("")
+  const [testOk, setTestOk] = useState(false)
 
   const save = () => {
     saveSettings({ baseURL, token })
-    return true
+    // 保存即退出：编辑完成直接回主屏，无需确认弹窗
+    Script.exit()
   }
 
   const test = async () => {
     if (!baseURL.trim()) {
-      Dialog.alert({ title: "请先填写面板地址", message: "例如 https://vps.example.com" })
+      setTestMsg("请先填写面板地址")
+      setTestOk(false)
       return
     }
     setTesting(true)
+    setTestMsg("测试中…")
     try {
       const snap = await fetchServers({ baseURL, token })
-      Dialog.alert({
-        title: "连接成功",
-        message: `面板：${snap.total} 台机器，在线 ${snap.online}，离线 ${snap.offline}。`,
-      })
+      setTestMsg(`成功：面板 ${snap.total} 台，在线 ${snap.online}，离线 ${snap.offline}`)
+      setTestOk(true)
     } catch (e) {
-      Dialog.alert({ title: "连接失败", message: e instanceof Error ? e.message : String(e) })
+      setTestMsg(`失败：${e instanceof Error ? e.message : String(e)}`)
+      setTestOk(false)
     } finally {
       setTesting(false)
     }
@@ -59,10 +62,7 @@ function SettingsPage() {
             <Button
               key="s"
               title="保存"
-              action={() => {
-                save()
-                Dialog.alert({ title: "已保存", message: "回到桌面，更新小组件即可生效。" })
-              }}
+              action={save}
             />,
           ],
         }}
@@ -115,6 +115,15 @@ function SettingsPage() {
             disabled={testing}
             action={test}
           />
+          {testMsg ? (
+            <Text
+              font="footnote"
+              foregroundStyle={testOk ? "systemGreen" : "systemRed"}
+              multilineTextAlignment="leading"
+            >
+              {testMsg}
+            </Text>
+          ) : null}
         </Section>
       </List>
     </NavigationStack>
