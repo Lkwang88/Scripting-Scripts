@@ -98,17 +98,15 @@ function SettingsPage() {
             </Text>
           }
         >
-          <VStack spacing={6} padding={8}>
-            <Text font="footnote" foregroundStyle="label">
-              总览（推荐）：● 在线状态 + CPU/内存条 + 吞吐
-            </Text>
-            <Text font="footnote" foregroundStyle="label">
-              ping：电信 / 联通 / 移动三网延迟，丢包标橙
-            </Text>
-            <Text font="footnote" foregroundStyle="label">
-              resources：CPU / 内存 / 磁盘三条占用
-            </Text>
-          </VStack>
+          <Text font="footnote" foregroundStyle="label">
+            总览（推荐）：● 在线状态 + CPU/内存条 + 吞吐
+          </Text>
+          <Text font="footnote" foregroundStyle="label">
+            ping：电信 / 联通 / 移动三网延迟，丢包标橙
+          </Text>
+          <Text font="footnote" foregroundStyle="label">
+            resources：CPU / 内存 / 磁盘三条占用
+          </Text>
         </Section>
 
         <Section header={<Text>连接测试</Text>}>
@@ -124,7 +122,7 @@ function SettingsPage() {
 }
 
 async function run() {
-  await Navigation.present(<SettingsPage />)
+  await Navigation.present({ element: <SettingsPage /> })
   Script.exit()
 }
 

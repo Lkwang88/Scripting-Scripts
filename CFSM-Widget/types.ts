@@ -41,3 +41,9 @@ export interface CfsmSettings {
   baseURL: string
   token?: string        // 可选 Bearer JWT（公开站留空即可）
 }
+
+/**
+ * ShapeStyle 颜色字面量联合。真机不认宽泛 string（只认具体颜色）
+ * —— 必须返回联合类型，UI 各处不要各写一套。
+ */
+export type PanelColor = "systemGreen" | "systemRed" | "systemOrange"

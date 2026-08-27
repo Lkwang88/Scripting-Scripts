@@ -25,7 +25,7 @@ import {
   type VirtualNode,
 } from "scripting"
 
-import { type CfsmServer, type CfsmSettings, type CfsmSnapshot, type WidgetMode } from "./types"
+import { type CfsmServer, type CfsmSnapshot, type PanelColor, type WidgetMode } from "./types"
 import { loadForWidget, loadSettings } from "./api"
 import { clock, flagEmoji, fmtBytes, fmtMs, fmtPct, relTime } from "./format"
 
@@ -93,7 +93,7 @@ function densityFor(family: string, count: number): RowDensity {
 
 /** 在线状态灯：双层圆（光晕 + 实心），离线灰红 */
 function Dot({ online, size }: { online: boolean; size: number }): VirtualNode {
-  const color = online ? "systemGreen" : "systemRed"
+  const color: PanelColor = online ? "systemGreen" : "systemRed"
   return (
     <ZStack frame={{ width: size + 6, height: size + 6 }}>
       <Circle fill={color} opacity={0.2} frame={{ width: size + 6, height: size + 6 }} />
@@ -112,7 +112,7 @@ function MiniBar({
   pct: number
   width: number
   height: number
-  color?: string
+  color?: PanelColor
 }): VirtualNode {
   const p = Math.min(100, Math.max(0, pct))
   const fw = Math.max(height, (width * p) / 100)
@@ -125,9 +125,9 @@ function MiniBar({
 }
 
 /** 状态颜色：CPU/RAM/磁盘 超阈值预警 */
-function usageColor(pct: number): string {
-  if (pct >= 85) return "systemOrange"
+function usageColor(pct: number): PanelColor {
   if (pct >= 95) return "systemRed"
+  if (pct >= 85) return "systemOrange"
   return "systemGreen"
 }
 
@@ -372,7 +372,7 @@ function SmallSummary({ snap }: { snap: CfsmSnapshot }): VirtualNode {
       <Header snap={snap} mode="overview" />
       <Spacer />
       <VStack spacing={2}>
-        <HStack spacing={2} alignment="firstTextBaseline">
+        <HStack spacing={2} alignment="bottom">
           <Text font="title3" fontWeight="bold" monospacedDigit foregroundStyle="label">
             {snap.online}
           </Text>

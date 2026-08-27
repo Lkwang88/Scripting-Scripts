@@ -14,7 +14,9 @@ export function fmtBytes(v: number): string {
     u++
   }
   if (u === 0) return `${Math.round(x)}B`
-  return x >= 100 ? `${Math.round(x)}${units[u]}` : `${x.toFixed(1)}${units[u]}`
+  if (x >= 100) return `${Math.round(x)}${units[u]}`
+  const s = x.toFixed(1)
+  return `${s.endsWith(".0") ? String(Math.round(x)) : s}${units[u]}`
 }
 
 /** 百分比整数："0%" "4%" "100%" */
