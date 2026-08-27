@@ -4,12 +4,16 @@
  * 铁律（VPS-Guard 血泪验证，违反即白屏/冻结）：
  * 1. 一次性渲染：Widget.present() 之后不执行，数据全在之前备好。
  * 2. 执行窗口很窄：fetch 带 5s 硬超时，失败降级缓存渲染，绝不白屏。
- * 3. 内存 ~30MB：不加载图片（国旗用 emoji），视图克制。
+ * 3. 内存 ~30MB：不加载图片，视图克制。
  *
  * 模式分流（Script.widgetParameter）：
- *   空 / overview → 总览面板（线路状态 + CPU/RAM 条 + 吞吐）
- *   ping          → 三网延迟面板（电信/联通/移动 + 丢包标红）
- *   resources     → 资源面板（CPU/RAM/DISK 三条进度）
+ *   空 / overview → 总览：每台显示 三网延迟（电/联/移）+ 总流量消耗
+ *   resources     → 资源：CPU / RAM / DISK 三条进度
+ * （v1.0.2 起 ping 模式并入总览——总览已含三网延迟）
+ *
+ * 对齐策略（v1.0.1 浩浩反馈"主机名长短不齐"）：
+ *   名字列按字符数估算定宽截断；数字列全部右对齐 + monospacedDigit，
+ *   整行统一字号（不再大字小字混排）。
  */
 
 import {
@@ -29,25 +33,14 @@ import {
 import { type CfsmServer, type CfsmSnapshot, type PanelColor, type WidgetMode } from "./types"
 import { loadForWidget, loadSettings } from "./api"
 import { RefreshIntent } from "./app_intents"
-import { clock, flagEmoji, fmtBytes, fmtMs, fmtPct, relTime } from "./format"
 
 // ---------------------------------------------------------------- 布局预算
 
-/**
- * 每行可用的字体档位。按 VPS-Guard 实测：
- * Large 约 338pt 高，标题 ~30pt + 底部 ~22pt → 行区 ~285pt。
- *   ≤12 台 宽敞档（footnote 行 + 迷你条）：每行 ~26pt → ~11 行
- *   >12   紧凑档（caption2 行去条）：每行 ~19pt → ~15 行
- * Medium 约 158pt 高：标题 ~26pt → 行区 ~130pt，compact 5 行。
- */
 type RowDensity = {
   rowFont: "footnote" | "caption" | "caption2"
   dot: number
   barH: number
   barW: number
-  showFlag: boolean
-  showBars: boolean
-  showNet: boolean
   spacing: number
   /** 名字列最大宽度（pt）：主机名长短不齐会导致数值列错位，定宽截断 */
   nameMax: number
@@ -62,11 +55,8 @@ function densityFor(family: string, count: number): RowDensity {
       dot: roomy ? 9 : 7,
       barH: roomy ? 7 : 5,
       barW: roomy ? 34 : 24,
-      showFlag: roomy,
-      showBars: roomy,
-      showNet: roomy,
       spacing: roomy ? 5 : 3,
-      nameMax: roomy ? 88 : 78,
+      nameMax: roomy ? 76 : 70,
     }
   }
   if (family === "systemMedium") {
@@ -75,11 +65,8 @@ function densityFor(family: string, count: number): RowDensity {
       dot: 8,
       barH: 6,
       barW: 28,
-      showFlag: false,
-      showBars: false,
-      showNet: true,
       spacing: 4,
-      nameMax: 70,
+      nameMax: 64,
     }
   }
   // systemSmall —— 只给摘要，不做列表
@@ -88,23 +75,21 @@ function densityFor(family: string, count: number): RowDensity {
     dot: 7,
     barH: 5,
     barW: 20,
-    showFlag: false,
-    showBars: false,
-    showNet: false,
     spacing: 3,
     nameMax: 0,
   }
 }
 
-/** 名字列宽度：按字符数估算（中文≈9pt，英文≈5.5pt），封顶 nameMax */
+/** 名字列宽度：按字符数估算（中文≈9.5pt，英文≈6pt），封顶 nameMax */
 function nameWidth(s: CfsmServer, d: RowDensity): number {
   const per = d.rowFont === "caption2" ? 8 : 10
   return Math.min(d.nameMax, Math.max(20, s.name.length * per + 6))
 }
 
-/** 数值列固定宽度（右对齐）：百分比 3 字符 / 网速 5 字符 */
+/** 数值列固定宽度（右对齐）：百分比 3 字符 / 网速 5 字符 / 延迟 4 字符 */
 const PCT_W = 30
-const NET_W = 46
+const NET_W = 48
+const PING_W = 36
 
 // ---------------------------------------------------------------- 零件
 
@@ -119,7 +104,7 @@ function Dot({ online, size }: { online: boolean; size: number }): VirtualNode {
   )
 }
 
-/** 迷你进度条（Capsule 双层），宽度按百分比 */
+/** 迷你进度条（Capsule 双层），宽度按百分比（resources 模式用） */
 function MiniBar({
   pct,
   width,
@@ -148,49 +133,78 @@ function usageColor(pct: number): PanelColor {
   return "systemGreen"
 }
 
-/** 单台服务器行（总览模式） */
-function OverviewRow({
-  s,
-  d,
-}: {
-  s: CfsmServer
-  d: RowDensity
-}): VirtualNode {
+/**
+ * 单台行（总览模式）：● 名字   77 / 127 / 78   119G
+ * 三网延迟按 电信/联通/移动 排序（丢包>10% 或 ≥500ms 标橙，离线标红）
+ * 总流量 = 累计下行 + 累计上行（net_rx + net_tx）
+ */
+function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
   const off = !s.online
-  const right: VirtualNode = off ? (
-    <Text font={d.rowFont} foregroundStyle="systemRed" lineLimit={1} minScaleFactor={0.8}>
-      离线
-    </Text>
-  ) : d.showBars ? (
-    <HStack spacing={d.spacing}>
-      <MiniBar pct={s.cpu} width={d.barW} height={d.barH} color={usageColor(s.cpu)} />
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.cpu)}
-      </Text>
-      <MiniBar pct={s.ramPct} width={d.barW} height={d.barH} color={usageColor(s.ramPct)} />
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.ramPct)}
-      </Text>
-      {d.showNet ? (
-        <Text font="caption2" monospacedDigit foregroundStyle="tertiaryLabel" frame={{ width: NET_W, alignment: "trailing" }}>
-          ↓{fmtBytes(s.netIn)}
+
+  const pingCell = (ms: number, loss: number, isLast: boolean) => {
+    const bad = ms >= 500 || loss > 10
+    return (
+      <HStack spacing={2}>
+        <Text
+          font={d.rowFont}
+          monospacedDigit
+          lineLimit={1}
+          minScaleFactor={0.75}
+          foregroundStyle={off ? "systemRed" : bad ? "systemOrange" : "secondaryLabel"}
+          frame={{ width: PING_W, alignment: "trailing" }}
+        >
+          {off ? "—" : fmtMs(ms)}
         </Text>
-      ) : null}
-    </HStack>
-  ) : (
-    <HStack spacing={d.spacing}>
-      <Text font={d.rowFont} monospacedDigit foregroundStyle="secondaryLabel" frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.cpu)}
+        {isLast ? null : (
+          <Text font={d.rowFont} opacity={0.4}>
+            /
+          </Text>
+        )}
+      </HStack>
+    )
+  }
+
+  return (
+    <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
+      <Dot online={s.online} size={d.dot} />
+      <Text
+        font={d.rowFont}
+        fontWeight="medium"
+        lineLimit={1}
+        minScaleFactor={0.8}
+        foregroundStyle="label"
+        frame={{ width: nameWidth(s, d), alignment: "leading" }}
+      >
+        {s.name}
       </Text>
-      <Text font={d.rowFont} monospacedDigit foregroundStyle="secondaryLabel" frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.ramPct)}
+
+      <Spacer minLength={2} />
+
+      {pingCell(s.pingCt, s.lossCt, false)}
+      {pingCell(s.pingCu, s.lossCu, false)}
+      {pingCell(s.pingCm, s.lossCm, true)}
+
+      <Spacer minLength={10} />
+
+      <Text
+        font={d.rowFont}
+        monospacedDigit
+        lineLimit={1}
+        minScaleFactor={0.8}
+        foregroundStyle={off ? "systemRed" : "label"}
+        frame={{ width: NET_W, alignment: "trailing" }}
+      >
+        {off ? "—" : fmtBytes(s.netRx + s.netTx)}
       </Text>
-      {d.showNet ? (
-        <Text font={d.rowFont} monospacedDigit foregroundStyle="tertiaryLabel" frame={{ width: NET_W, alignment: "trailing" }}>
-          ↓{fmtBytes(s.netIn)}
-        </Text>
-      ) : null}
     </HStack>
+  )
+}
+
+/** 单台行（资源模式）：● 名  [CPU][RAM][DSK] */
+function ResourceRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
+  const off = !s.online
+  const bar = (pct: number) => (
+    <MiniBar pct={pct} width={d.barW} height={d.barH} color={usageColor(pct)} />
   )
   return (
     <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
@@ -205,119 +219,61 @@ function OverviewRow({
       >
         {s.name}
       </Text>
-      {d.showFlag && flagEmoji(s.region) ? (
-        <Text font="caption2" opacity={0.8}>
-          {flagEmoji(s.region)}
-        </Text>
-      ) : null}
-
-      <Spacer minLength={2} />
-
-      {right}
-    </HStack>
-  )
-}
-
-/** 单台行（三网模式）：● 名 区  CT 77  CU 127  CM 78 */
-function PingRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
-  const off = !s.online
-  const cell = (ms: number, loss: number, label: string) => {
-    const bad = loss > 10 || ms >= 500
-    return (
-      <HStack spacing={2}>
-        <Text font="caption2" opacity={0.6}>
-          {label}
-        </Text>
-        <Text
-          font={d.rowFont}
-          monospacedDigit
-          foregroundStyle={off ? "systemRed" : bad ? "systemOrange" : "secondaryLabel"}
-          lineLimit={1}
-          minScaleFactor={0.8}
-          frame={{ width: 34, alignment: "trailing" }}
-        >
-          {off ? "—" : `${fmtMs(ms)}`}
-        </Text>
-      </HStack>
-    )
-  }
-  return (
-    <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
-      <Dot online={s.online} size={d.dot} />
-      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.8} foregroundStyle="label" frame={{ width: nameWidth(s, d), alignment: "leading" }}>
-        {s.name}
-      </Text>
-      {flagEmoji(s.region) ? (
-        <Text font="caption2" opacity={0.8}>
-          {flagEmoji(s.region)}
-        </Text>
-      ) : null}
-      <Spacer minLength={2} />
-      {cell(s.pingCt, s.lossCt, "电")}
-      <Spacer minLength={4} />
-      {cell(s.pingCu, s.lossCu, "联")}
-      <Spacer minLength={4} />
-      {cell(s.pingCm, s.lossCm, "移")}
-    </HStack>
-  )
-}
-
-/** 单台行（资源模式）：● 名  [CPU][RAM][DSK] */
-function ResourceRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
-  const off = !s.online
-  const bar = (pct: number) => (
-    <MiniBar pct={pct} width={d.barW} height={d.barH} color={usageColor(pct)} />
-  )
-  return (
-    <HStack spacing={d.spacing} opacity={off ? 0.55 : 1}>
-      <Dot online={s.online} size={d.dot} />
-      <Text font={d.rowFont} fontWeight="medium" lineLimit={1} minScaleFactor={0.8} foregroundStyle="label" frame={{ width: nameWidth(s, d), alignment: "leading" }}>
-        {s.name}
-      </Text>
       <Spacer minLength={2} />
       {bar(s.cpu)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.cpu)}
+      <Text
+        font={d.rowFont}
+        monospacedDigit
+        foregroundStyle="secondaryLabel"
+        opacity={0.9}
+        frame={{ width: PCT_W, alignment: "trailing" }}
+      >
+        {off ? "—" : fmtPct(s.cpu)}
       </Text>
       <Spacer minLength={4} />
       {bar(s.ramPct)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.ramPct)}
+      <Text
+        font={d.rowFont}
+        monospacedDigit
+        foregroundStyle="secondaryLabel"
+        opacity={0.9}
+        frame={{ width: PCT_W, alignment: "trailing" }}
+      >
+        {off ? "—" : fmtPct(s.ramPct)}
       </Text>
       <Spacer minLength={4} />
       {bar(s.diskPct)}
-      <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.9} frame={{ width: PCT_W, alignment: "trailing" }}>
-        {fmtPct(s.diskPct)}
+      <Text
+        font={d.rowFont}
+        monospacedDigit
+        foregroundStyle="secondaryLabel"
+        opacity={0.9}
+        frame={{ width: PCT_W, alignment: "trailing" }}
+      >
+        {off ? "—" : fmtPct(s.diskPct)}
       </Text>
     </HStack>
   )
-}
+}// ---------------------------------------------------------------- 骨架
 
-/** 标题行：站点名 + 在线统计 + 全站吞吐（不同模式可定制右侧） */
+/** 标题行：站点名 + 在线统计 + 列头说明 */
 function Header({
   snap,
   mode,
+  compact,
 }: {
   snap: CfsmSnapshot
   mode: WidgetMode
+  compact?: boolean
 }): VirtualNode {
   const right =
-    mode === "overview" ? (
-      <HStack spacing={4}>
-        <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel">
-          ↓{fmtBytes(snap.globalIn)}
-        </Text>
-        <Text font="caption2" monospacedDigit foregroundStyle="secondaryLabel" opacity={0.7}>
-          ↑{fmtBytes(snap.globalOut)}
-        </Text>
-      </HStack>
-    ) : mode === "ping" ? (
+    mode === "resources" ? (
       <Text font="caption2" foregroundStyle="secondaryLabel">
-        三网延迟
+        资源占用
       </Text>
     ) : (
       <Text font="caption2" foregroundStyle="secondaryLabel">
-        资源占用
+        电 / 联 / 移 · 流量
       </Text>
     )
 
@@ -332,8 +288,43 @@ function Header({
         {snap.online}/{snap.total}
       </Text>
       <Spacer minLength={2} />
-      {right}
+      {compact ? null : right}
     </HStack>
+  )
+}
+
+/** systemSmall：红绿灯摘要（在线 N/M + 离线点名） */
+function SmallSummary({ snap }: { snap: CfsmSnapshot }): VirtualNode {
+  const offlineNames = snap.servers.filter(s => !s.online).map(s => s.name).slice(0, 3)
+  return (
+    <VStack spacing={8} padding={12}>
+      <Header snap={snap} mode="overview" compact />
+      <Spacer />
+      <VStack spacing={2}>
+        <HStack spacing={2} alignment="bottom">
+          <Text font="title3" fontWeight="bold" monospacedDigit foregroundStyle="label">
+            {snap.online}
+          </Text>
+          <Text font="caption" foregroundStyle="secondaryLabel">
+            / {snap.total}
+          </Text>
+        </HStack>
+        <Text font="caption2" foregroundStyle="secondaryLabel">
+          在线
+        </Text>
+      </VStack>
+      <Spacer />
+      {offlineNames.length > 0 ? (
+        <Text font="caption2" foregroundStyle="systemOrange" lineLimit={2} minScaleFactor={0.75}>
+          离线：{offlineNames.join("、")}
+        </Text>
+      ) : (
+        <Text font="caption2" foregroundStyle="secondaryLabel">
+          全部在线
+        </Text>
+      )}
+      <Footer snap={snap} stale={false} />
+    </VStack>
   )
 }
 
@@ -355,11 +346,7 @@ function Footer({ snap, stale }: { snap: CfsmSnapshot; stale: boolean }): Virtua
         {stale ? `缓存 ${relTime(snap.savedAt, Date.now())}` : clock(snap.savedAt)}
       </Text>
       <Button intent={RefreshIntent(undefined)}>
-        <Image
-          systemName="arrow.clockwise"
-          imageScale="small"
-          widgetAccentable
-        />
+        <Image systemName="arrow.clockwise" imageScale="small" widgetAccentable />
       </Button>
     </HStack>
   )
@@ -369,11 +356,7 @@ function Footer({ snap, stale }: { snap: CfsmSnapshot; stale: boolean }): Virtua
 function ErrView(msg: string): VirtualNode {
   return (
     <VStack spacing={6} padding={12}>
-      <Image
-        systemName="wifi.exclamationmark"
-        imageScale="medium"
-        foregroundStyle="systemOrange"
-      />
+      <Image systemName="wifi.exclamationmark" imageScale="medium" foregroundStyle="systemOrange" />
       <Text font="caption" foregroundStyle="secondaryLabel" multilineTextAlignment="center">
         {msg}
       </Text>
@@ -382,12 +365,11 @@ function ErrView(msg: string): VirtualNode {
       </Text>
     </VStack>
   )
-}// ---------------------------------------------------------------- 骨架
+}
 
-/** parameter → 模式（未知值一律按总览） */
+/** parameter → 模式（v1.0.2 起 ping 并入总览） */
 function modeOf(param: string): WidgetMode {
   const p = String(param ?? "").trim().toLowerCase()
-  if (p === "ping") return "ping"
   if (p === "resources" || p === "resource") return "resources"
   return "overview"
 }
@@ -397,43 +379,6 @@ function rowCapacity(family: string, count: number): number {
   if (family === "systemLarge") return count <= 12 ? 11 : 15
   if (family === "systemMedium") return 5
   return 0
-}
-
-/** systemSmall：不做列表，给红绿灯摘要（在线 N/M + 离线点名） */
-function SmallSummary({ snap }: { snap: CfsmSnapshot }): VirtualNode {
-  const offlineNames = snap.servers.filter(s => !s.online).map(s => s.name).slice(0, 3)
-  return (
-    <VStack spacing={8} padding={12}>
-      <Header snap={snap} mode="overview" />
-      <Spacer />
-      <VStack spacing={2}>
-        <HStack spacing={2} alignment="bottom">
-          <Text font="title3" fontWeight="bold" monospacedDigit foregroundStyle="label">
-            {snap.online}
-          </Text>
-          <Text font="caption" foregroundStyle="secondaryLabel">
-            / {snap.total}
-          </Text>
-        </HStack>
-        <Text font="caption2" foregroundStyle="secondaryLabel">
-          在线
-        </Text>
-      </VStack>
-      <Spacer />
-      {offlineNames.length > 0 ? (
-        <VStack spacing={2}>
-          <Text font="caption2" foregroundStyle="systemOrange" lineLimit={2} minScaleFactor={0.75}>
-            离线：{offlineNames.join("、")}
-          </Text>
-        </VStack>
-      ) : (
-        <Text font="caption2" foregroundStyle="secondaryLabel">
-          全部在线
-        </Text>
-      )}
-      <Footer snap={snap} stale={false} />
-    </VStack>
-  )
 }
 
 /** 主面板：标题 + 行列表 + 底部状态 */
@@ -455,7 +400,7 @@ function Panel({
   const onlineFirst = [...snap.servers].sort((a, b) => Number(b.online) - Number(a.online))
   const list = cap > 0 ? onlineFirst.slice(0, cap) : onlineFirst
 
-  const R = mode === "ping" ? PingRow : mode === "resources" ? ResourceRow : OverviewRow
+  const R = mode === "resources" ? ResourceRow : OverviewRow
 
   return (
     <VStack spacing={7} padding={12}>

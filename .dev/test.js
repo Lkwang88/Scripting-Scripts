@@ -274,7 +274,7 @@ function result(over, outcome = "offline") {
 
   // --- api.extractServers：在线判定 + 字段提取 + 排序
   const raw = [
-    { id: "a", name: "新加坡", region: "SG", last_updated: tNow - 60000, cpu: 0.5, ram_total: 1000, ram_used: 400, disk_total: 100, disk_used: 91, net_in_speed: 102400, ping_ct: 77, loss_ct: 0 },
+    { id: "a", name: "新加坡", region: "SG", last_updated: tNow - 60000, cpu: 0.5, ram_total: 1000, ram_used: 400, disk_total: 100, disk_used: 91, net_in_speed: 102400, ping_ct: 77, loss_ct: 0, net_rx: 76301841402, net_tx: 42475632665 },
     { id: "b", name: "东京", region: "JP", last_updated: tNow - 6000000, cpu: 12, ram_total: 2000, ram_used: 500 },
     { id: "c", name: "LAX", region: "us", last_updated: tNow - 40000, cpu: 3, ram_total: 0, ram_used: 9 },
   ]
@@ -285,6 +285,7 @@ function result(over, outcome = "offline") {
   ok("diskPct 91%", sg && sg.diskPct === 91)
   ok("netIn 保留", sg && sg.netIn === 102400)
   ok("region 大写化", sg && sg.region === "SG")
+  ok("净流量字段", sg && sg.netRx === 76301841402 && sg.netTx === 42475632665)
   const lax = sv.find(x => x.id === "c")
   ok("ram total 0 → 0%", lax && lax.ramPct === 0)
   ok("名字排序", sv[0].name === "LAX")

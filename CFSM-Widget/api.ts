@@ -52,6 +52,10 @@ interface RawServer {
   loss_ct?: number
   loss_cu?: number
   loss_cm?: number
+  net_rx?: number
+  net_tx?: number
+  net_rx_monthly?: number
+  net_tx_monthly?: number
   last_updated?: number
 }
 
@@ -88,6 +92,10 @@ export function extractServers(raw: unknown[] | undefined, now: number): CfsmSer
       lossCt: num(s.loss_ct),
       lossCu: num(s.loss_cu),
       lossCm: num(s.loss_cm),
+      netRx: num(s.net_rx),
+      netTx: num(s.net_tx),
+      netRxMonth: num(s.net_rx_monthly),
+      netTxMonth: num(s.net_tx_monthly),
       lastUpdated,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))

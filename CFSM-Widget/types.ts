@@ -22,6 +22,10 @@ export interface CfsmServer {
   lossCt: number        // 电信丢包 %
   lossCu: number        // 联通丢包 %
   lossCm: number        // 移动丢包 %
+  netRx: number         // 累计接收字节（总流量）
+  netTx: number         // 累计发送字节（总流量）
+  netRxMonth: number    // 当月接收字节
+  netTxMonth: number    // 当月发送字节
   lastUpdated: number   // epoch ms
 }
 
