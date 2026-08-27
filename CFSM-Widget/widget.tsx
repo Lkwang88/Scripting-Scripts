@@ -33,6 +33,7 @@ import {
 import { type CfsmServer, type CfsmSnapshot, type PanelColor, type WidgetMode } from "./types"
 import { loadForWidget, loadSettings } from "./api"
 import { RefreshIntent } from "./app_intents"
+import { clock, fmtBytes, fmtMs, fmtPct, relTime } from "./format"
 
 // ---------------------------------------------------------------- 布局预算
 
