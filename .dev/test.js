@@ -245,6 +245,66 @@ function result(over, outcome = "offline") {
   eq("  端口保持", hs[1].probe.port, 2222)
 }
 
+// ================================================ 18. CFSM Panel 纯逻辑
+{
+  const CA = require("./build/CFSM-Widget/api.js")
+  const CF = require("./build/CFSM-Widget/format.js")
+
+  // --- format 格式化
+  eq("fmtBytes 855", CF.fmtBytes(855), "855B")
+  eq("fmtBytes 19K", CF.fmtBytes(19024), "19K")
+  eq("fmtBytes 1.2M", CF.fmtBytes(1200000), "1.2M")
+  eq("fmtBytes 2.1G", CF.fmtBytes(2100000000), "2.1G")
+  eq("fmtBytes 0", CF.fmtBytes(0), "0")
+  eq("fmtPct 4.3", CF.fmtPct(4.3), "4%")
+  eq("fmtPct clamp 120", CF.fmtPct(120), "100%")
+  eq("fmtPct -5", CF.fmtPct(-5), "0%")
+  eq("fmtMs 77", CF.fmtMs(77), "77")
+  eq("fmtMs 1.5s", CF.fmtMs(1500), "1.5s")
+  eq("fmtMs 0", CF.fmtMs(0), "—")
+  eq("flag SG", CF.flagEmoji("SG"), "🇸🇬")
+  eq("flag CN", CF.flagEmoji("CN"), "🇨🇳")
+  eq("flag 小写", CF.flagEmoji("us"), "🇺🇸")
+  eq("flag 非法", CF.flagEmoji("abc"), "")
+  const tNow = new Date(2026, 0, 1, 14, 5, 0).getTime()
+  eq("relTime 刚刚", CF.relTime(tNow - 30000, tNow), "刚刚")
+  eq("relTime 2分钟", CF.relTime(tNow - 120000, tNow), "2分钟前")
+  eq("relTime 3小时", CF.relTime(tNow - 3 * 3600000, tNow), "3小时前")
+  eq("clock 14:05", CF.clock(tNow), "14:05")
+
+  // --- api.extractServers：在线判定 + 字段提取 + 排序
+  const raw = [
+    { id: "a", name: "新加坡", region: "SG", last_updated: tNow - 60000, cpu: 0.5, ram_total: 1000, ram_used: 400, disk_total: 100, disk_used: 91, net_in_speed: 102400, ping_ct: 77, loss_ct: 0 },
+    { id: "b", name: "东京", region: "JP", last_updated: tNow - 6000000, cpu: 12, ram_total: 2000, ram_used: 500 },
+    { id: "c", name: "LAX", region: "us", last_updated: tNow - 40000, cpu: 3, ram_total: 0, ram_used: 9 },
+  ]
+  const sv = CA.extractServers(raw, tNow)
+  eq("2台在线1台离线", sv.filter(x => x.online).length, 2)
+  const sg = sv.find(x => x.id === "a")
+  ok("ramPct 40%", sg && sg.ramPct === 40)
+  ok("diskPct 91%", sg && sg.diskPct === 91)
+  ok("netIn 保留", sg && sg.netIn === 102400)
+  ok("region 大写化", sg && sg.region === "SG")
+  const lax = sv.find(x => x.id === "c")
+  ok("ram total 0 → 0%", lax && lax.ramPct === 0)
+  ok("名字排序", sv[0].name === "LAX")
+
+  // --- api 快照缓存（走 Storage mock）
+  CA.saveSnapshot({ savedAt: tNow, total: 3, online: 2, offline: 1, globalIn: 1, globalOut: 2, servers: sv })
+  const loaded = CA.loadSnapshot()
+  ok("快照缓存回读", loaded && loaded.total === 3 && loaded.servers.length === 3)
+
+  // --- api.buildSnapshot 统计汇总
+  const built = CA.buildSnapshot(
+    { servers: raw, stats: { total: 3, online: 2, offline: 1, globalSpeedIn: 9999, globalSpeedOut: 8888 } },
+    tNow,
+  )
+  eq("stats total", built.total, 3)
+  eq("stats online", built.online, 2)
+  eq("globalIn 汇总", built.globalIn, 9999)
+  eq("servers 已排序", built.servers[0].name, "LAX")
+}
+
 // ---------------------------------------------- 汇总
 console.log(`\n通过 ${pass} / ${pass + fail}`)
 if (fails.length) {

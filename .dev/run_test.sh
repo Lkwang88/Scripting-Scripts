@@ -10,11 +10,16 @@
 set -e
 cd "$(dirname "$0")"
 
-mkdir -p build/VPS-Guard
+mkdir -p build/VPS-Guard build/CFSM-Widget
 
 echo "── esbuild 转译 TS → CJS ──"
 for f in types store format probe; do
   esbuild "../VPS-Guard/$f.ts" --format=cjs --outfile="build/VPS-Guard/$f.js" --log-level=warning
+done
+
+echo "── esbuild 转译 CFSM-Widget TS → CJS ──"
+for f in types api format; do
+  esbuild "../CFSM-Widget/$f.ts" --format=cjs --outfile="build/CFSM-Widget/$f.js" --log-level=warning
 done
 
 echo "── node 单进程跑测试 ──"
