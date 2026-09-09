@@ -7,7 +7,7 @@
  * 3. 内存 ~30MB：不加载图片，视图克制。
  *
  * 模式分流（Script.widgetParameter）：
- *   空 / overview → 总览：每台显示 三网延迟（电/联/移）+ 总流量消耗
+ *   空 / overview → 总览：每台显示 三网延迟（电/联/移）+ 月流量消耗
  *   resources     → 资源：CPU / RAM / DISK 三条进度
  * （v1.0.2 起 ping 模式并入总览——总览已含三网延迟）
  *
@@ -154,9 +154,9 @@ function usageColor(pct: number): PanelColor {
 }
 
 /**
- * 单台行（总览模式）：🇸🇬 新加坡   77 / 127 / 78   119G
+ * 单台行（总览模式）：🇸🇬 新加坡   77 / 127 / 78   1.2G
  * 国旗固定排第一（区域码空时占位空格）；名字列定宽截断（".."）；
- * 三网延迟按固定宽度右对齐；流量在最后（不影响对齐）。
+ * 三网延迟按固定宽度右对齐；月流量在最后（不影响对齐）。
  * 离线：整行降透明 + 名字标红，延迟/流量显示 "—"。
  */
 function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
@@ -218,7 +218,7 @@ function OverviewRow({ s, d }: { s: CfsmServer; d: RowDensity }): VirtualNode {
         foregroundStyle={off ? "systemRed" : "label"}
         frame={{ width: NET_W, alignment: "trailing" }}
       >
-        {off ? "—" : fmtBytes(s.netRx + s.netTx)}
+        {off ? "—" : fmtBytes(s.netRxMonth + s.netTxMonth)}
       </Text>
     </HStack>
   )
@@ -297,7 +297,7 @@ function Header({
       </Text>
     ) : (
       <Text font="caption2" foregroundStyle="secondaryLabel">
-        电 / 联 / 移 · 流量
+        电 / 联 / 移 · 月流量
       </Text>
     )
 
