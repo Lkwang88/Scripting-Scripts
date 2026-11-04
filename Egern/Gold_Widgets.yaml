@@ -1,0 +1,33 @@
+name: "招商实时金价"
+description: "实时展示招商银行黄金买入/卖出价格与涨跌走势，支持深浅色模式自动切换，支持小/中尺寸小组件。"
+author: "IBL3ND"
+icon: "banknote.fill"
+
+env_schema:
+  TITLE:
+    name: "组件标题"
+    description: "小组件左上角标题"
+    default_value: "招商金价"
+  REFRESH_MINUTES:
+    name: "刷新间隔（分钟）"
+    description: "数据刷新间隔，默认 5 分钟"
+    default_value: "5"
+    options:
+      - "5"
+      - "10"
+      - "15"
+      - "30"
+  POLICY:
+    name: "请求策略"
+    description: "请求走的 Egern 策略或策略组（国内直连留空即可）"
+
+scriptings:
+  - generic:
+      name: "gold-widget-script"
+      script_url: "https://raw.githubusercontent.com/Lkwang88/Scripting-Scripts/main/Egern/Gold_Widgets.js"
+      update_interval: 86400
+      timeout: 10
+
+widgets:
+  - name: "招商金价"
+    script_name: "gold-widget-script"

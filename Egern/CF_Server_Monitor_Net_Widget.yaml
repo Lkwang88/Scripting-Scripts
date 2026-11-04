@@ -1,0 +1,46 @@
+name: "CF 探针·延迟流量"
+description: "CF-Server-Monitor 延迟流量版：三网延迟（电信/联通/移动）垂直对齐、月流量微胶囊进度与在线状态。纯净 NextGen 架构，专为 iOS WidgetKit 优化，省电不休眠。"
+author: "Lkwang88 & 小仓酱"
+icon: "server.rack"
+
+env_schema:
+  CFSM_URL:
+    name: "面板地址"
+    description: "例如 https://monitor.example.com，只填根地址，无需带 /admin 或 /api"
+  CFSM_USER:
+    name: "后台账号"
+    description: "后台管理员账号（公开站点留空）"
+  CFSM_PASS:
+    name: "后台密码"
+    description: "私有站点或需显示隐藏服务器时填写，公开站点留空"
+  TITLE:
+    name: "组件标题"
+    description: "小组件左上角显示的标题文字"
+    default_value: "CF Monitor"
+  REFRESH_MINUTES:
+    name: "刷新间隔（分钟）"
+    description: "建议 15 分钟（PT15M），保护 iOS 全天刷新配额不休眠"
+    default_value: "15"
+    options:
+      - "15"
+      - "30"
+      - "60"
+      - "5"
+      - "10"
+  SERVERS:
+    name: "指定服务器"
+    description: "只显示这些节点（名称或 ID，英文逗号分隔；留空显示全部）"
+  POLICY:
+    name: "请求策略"
+    description: "请求走的 Egern 策略或策略组（如 Proxy，直连留空即可）"
+
+scriptings:
+  - generic:
+      name: "cfsm-clean-widget-script"
+      script_url: "https://raw.githubusercontent.com/Lkwang88/Scripting-Scripts/main/Egern/CF_Server_Monitor_Net_Widget.js"
+      update_interval: 86400
+      timeout: 10
+
+widgets:
+  - name: "CF 延迟流量"
+    script_name: "cfsm-clean-widget-script"
