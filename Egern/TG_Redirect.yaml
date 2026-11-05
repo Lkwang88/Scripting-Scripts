@@ -1,0 +1,27 @@
+name: "Telegram 链接跳转"
+description: "将 https://t.me/... 网页链接自动重定向至 Telegram 原生或第三方客户端（支持 Nagram、Swiftgram 等）"
+author: "panda𝕏 / 小仓酱修改版"
+env_schema:
+  CLIENT:
+    name: "Telegram 客户端"
+    description: "选择点击 t.me 链接时要自动跳转的客户端"
+    default_value: "Nagram"
+    options:
+      - Nagram
+      - Telegram
+      - Swiftgram
+      - Turrit
+      - iMe
+      - Nicegram
+      - Lingogram
+      - Teledark
+      - Telega
+scriptings:
+  - http_request:
+      name: "Telegram 链接重定向"
+      match: "^https?://t\\.me/.+"
+      script_url: "https://raw.githubusercontent.com/Lkwang88/Scripting-Scripts/main/Egern/TG_Redirect.js"
+      timeout: 10
+mitm:
+  hostnames:
+    - "t.me"

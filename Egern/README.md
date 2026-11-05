@@ -43,6 +43,21 @@ CF-Server-Monitor 专用多节点在线与网络质量监控小组件（NextGen 
 
 ---
 
+### 3. Telegram 链接跳转 (`TG_Redirect.yaml`)
+自动将浏览器或各类 App 中打开的 `https://t.me/...` 链接重定向唤醒指定的 Telegram 客户端（原生支持 Nagram 专属协议）。
+* **功能特性**：
+  * **支持 Nagram 专属协议**：采用 `nagram://` Scheme，彻底解决多客户端共存时 `tg://` 被系统随机抢占唤醒的问题。
+  * **支持主流全客户端**：Nagram、Telegram、Swiftgram、Turrit、Nicegram、iMe、Telega 等图形化一键切换。
+  * **覆盖全场景链接**：频道/群组公开链接 (`resolve?domain=`)、私密邀请链接 (`join?invite=`)、贴纸包 (`addstickers?set=`)、分享文本 (`msg_url`) 等。
+* **Egern 一键安装链接**：
+  ```text
+  https://raw.githubusercontent.com/Lkwang88/Scripting-Scripts/main/Egern/TG_Redirect.yaml
+  ```
+* **可配置环境变量（UI 自动生成）**：
+  * `CLIENT`: 下拉选择需要唤醒的客户端（默认 `Nagram`）
+
+---
+
 ## 安装方法
 
 1. 打开 **Egern** App；
