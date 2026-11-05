@@ -4,11 +4,11 @@
  * 说明：
  * - 客户端选择通过模块的 env_schema 写入模块级 env
  * - 脚本直接读取 ctx.env.CLIENT
- * - 官方开源支持：已增加 Nagram 专属协议 (nagram://)
+ * - 官方开源支持：已增加 Nagram 专属协议 (na://)
  */
 
 const SCHEME = {
-  Nagram: "nagram",
+  Nagram: "na",
   Telegram: "tg",
   Teledark: "telegram",
   Telega: "telega",
@@ -56,7 +56,7 @@ export default async function (ctx) {
   if (!m) return;
 
   const client = (ctx.env?.CLIENT || "Nagram").trim();
-  const scheme = SCHEME[client] || "nagram";
+  const scheme = SCHEME[client] || "na";
 
   let tail = m[1];
   if (tail.startsWith("s/")) tail = tail.slice(2);
