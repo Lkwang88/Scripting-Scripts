@@ -4,10 +4,10 @@ desc: 招商黄金买入、卖出与涨跌；请求失败时显示最近24小时
 tiles:
   - name: lkwang88-gold-widget
     interval: 300
-    title: 招商金价
+    title: 招商金价 · 元/克
     content: 等待获取金价…
-    icon: banknote.fill
-    backgroundColor: '#B78628'
+    icon: banknote
+    backgroundColor: '#252A34'
     # POLICY 留空遵循现有分流；填 DIRECT 为显式直连。
     argument: '{"TITLE":"招商金价","POLICY":""}'
 

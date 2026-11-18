@@ -15,7 +15,7 @@
     if (finished) return;
     finished = true;
     if (typeof clearTimeout === "function") clearTimeout(watchdog);
-    $done({ title: title, content: content, icon: "banknote.fill", backgroundColor: "#B78628" });
+    $done({ title: title + " · 元/克", content: content, icon: "banknote", backgroundColor: "#252A34" });
   }
 
   function numeric(value, positive) {
@@ -36,12 +36,14 @@
 
   function render(quote, cached) {
     var amount = Number(quote.change);
-    var mark = amount > 0 ? "↑" : amount < 0 ? "↓" : "→";
     var change = (amount > 0 ? "+" : "") + amount.toFixed(2);
-    finish("买入 " + quote.buy + " 元/克\n" +
-      "卖出 " + quote.sell + " 元/克\n" +
-      mark + " 涨跌 " + change + "\n" +
-      (cached ? "⚠ 缓存 " : "更新 ") + timeText(quote.fetchedAt));
+    // Equal-length Chinese labels and a single full-width separator per row.
+    // Tile owns the font/alignment; avoid unsupported style fields or fake fonts.
+    var timestamp = cached ? timeText(quote.fetchedAt) : timeText(quote.fetchedAt).slice(6);
+    finish("买入　" + Number(quote.buy).toFixed(2) + "\n" +
+      "卖出　" + Number(quote.sell).toFixed(2) + "\n" +
+      "涨跌　" + change + "\n" +
+      (cached ? "⚠ 缓存　" : "更新　") + timestamp);
   }
 
   function fallback(reason) {
