@@ -9,6 +9,7 @@
 | [VPS Guard](./VPS-Guard) | VPS 在线状态红绿灯，主屏小组件 + 主 App 管理 |
 | [CFSM Widget](./CFSM-Widget) | CF-Server-Monitor 多机在线面板小组件 (Scripting) |
 | [Egern Modules](./Egern) | Egern 原生小组件模块集合（CFSM 探针延迟流量监控、招商实时金价） |
+| [Stash Panels](./Stash) | Stash 面板与覆写（招商实时金价，支持 URL 安装） |
 
 ## 目录约定
 

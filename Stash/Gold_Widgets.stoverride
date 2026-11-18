@@ -1,0 +1,17 @@
+name: 招商实时金价
+desc: 招商黄金买入、卖出与涨跌；请求失败时显示最近24小时内缓存及获取时间。
+# 面板刷新间隔单位为秒；桌面刷新仍受系统和 Stash 调度限制。
+tiles:
+  - name: lkwang88-gold-widget
+    interval: 300
+    title: 招商金价
+    content: 等待获取金价…
+    icon: banknote.fill
+    backgroundColor: '#B78628'
+    # POLICY 留空遵循现有分流；填 DIRECT 为显式直连。
+    argument: '{"TITLE":"招商金价","POLICY":""}'
+
+script-providers:
+  lkwang88-gold-widget:
+    url: https://raw.githubusercontent.com/Lkwang88/Scripting-Scripts/main/Stash/Gold_Widgets.js
+    interval: 86400
